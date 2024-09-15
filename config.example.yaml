@@ -1,0 +1,43 @@
+# define any number of cmis to which to send data
+cmis:
+    # hostname or ip
+  - host: hostname.example.com
+    # virtual can id to use on that CMIs CAN-Bus
+    our_virtual_can_id: 59
+    # rooms to push data for to this bus
+    rooms:
+      # name must match ressource names in CT exactly
+    - name: room1
+      # the output index to send this value from on the CAN Bus
+      pdo_index: 1
+    - name: room6
+      pdo_index: 2
+  - host: 10.15.6.6
+    our_virtual_can_id: 12
+    rooms:
+      # notice that names can be overlapping
+      # here, the data for room 1 is sent to both the CMI at hostname.example.com and at 10.15.6.6
+    - name: room1
+      pdo_index: 1
+    - name: room2
+      pdo_index: 2
+
+# we scale hold over time based on external temperature
+# For this, we need a sensor. We expect to get the external temperature via COE
+external_temperature_sensor:
+  # OUR bind address. Sending CMI will need to send the external temperature to this address with COEv2
+  bind_addr: 192.168.24.173
+  # expect the CMI to send the temperature as CAN-ID ...
+  can_id: 1
+  # expect the external temperature to be sent on this output index
+  pdo_index: 1
+  # When the external temperature is missing for mor then ... minutes, assume the CMI unresponsive.
+  # No longer scale hold over time, and use the theoretical maximum hold over time instead
+  timeout: 5
+
+ct:
+  # the hostname of your CT instance
+  host: "example.church.tools"
+  # The login token for the user to use
+  login_token: "NOT_THE_LOGIN_TOKEN"
+
