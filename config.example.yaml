@@ -6,20 +6,26 @@ cmis:
     our_virtual_can_id: 59
     # rooms to push data for to this bus
     rooms:
-      # name must match ressource names in CT exactly
+      # name (human readable, HAS NO SEMANTIC)
     - name: room1
+      # id of the ressource in CT.
+      # this is used to actually map ressources to rooms
+      churchtools_id: 41
       # the output index to send this value from on the CAN Bus
       pdo_index: 1
     - name: room6
+      churchtools_id: 42
       pdo_index: 2
   - host: 10.15.6.6
     our_virtual_can_id: 12
     rooms:
-      # notice that names can be overlapping
+      # notice that rooms (ct_id, name) can be overlapping
       # here, the data for room 1 is sent to both the CMI at hostname.example.com and at 10.15.6.6
     - name: room1
+      churchtools_id: 41
       pdo_index: 1
     - name: room2
+      churchtools_id: 56
       pdo_index: 2
 
 # we scale hold over time based on external temperature
@@ -39,5 +45,6 @@ ct:
   # the hostname of your CT instance
   host: "example.church.tools"
   # The login token for the user to use
+  # user needs read-access to the ressources defined above
   login_token: "NOT_THE_LOGIN_TOKEN"
 

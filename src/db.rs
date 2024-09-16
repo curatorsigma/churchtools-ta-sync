@@ -25,13 +25,13 @@ impl std::fmt::Display for DBError {
 impl std::error::Error for DBError {}
 
 pub async fn get_all_bookings(db: &Pool<Sqlite>) -> Result<Vec<Booking>, DBError> {
-    sqlx::query_as!(crate::Booking, "SELECT churchtools_id, room, start_time, end_time FROM bookings;")
+    sqlx::query_as!(crate::Booking, "SELECT churchtools_id, start_time, end_time FROM bookings;")
         .fetch_all(db).await.map_err(|e| DBError::CannotSelectBookings(e))
 }
 
 pub async fn get_bookings_in_timeframe(db: &Pool<Sqlite>, start: NaiveDateTime, end: NaiveDateTime) -> Result<Vec<Booking>, DBError>  {
     sqlx::query_as!(crate::Booking,
-        "SELECT churchtools_id, room, start_time, end_time FROM bookings \
+        "SELECT churchtools_id, start_time, end_time FROM bookings \
          WHERE start_time > ? AND end_time < ?;",
          start,
          end
@@ -41,11 +41,10 @@ pub async fn get_bookings_in_timeframe(db: &Pool<Sqlite>, start: NaiveDateTime, 
 
 pub async fn insert_booking(db: &Pool<Sqlite>, booking: Booking) -> Result<(), DBError> {
     sqlx::query!(
-        "INSERT INTO bookings (churchtools_id, room, start_time, end_time) VALUES \
-        (?, ?, ?, ?);
+        "INSERT INTO bookings (churchtools_id, start_time, end_time) VALUES \
+        (?, ?, ?);
         ",
             booking.churchtools_id, 
-            booking.room,
             booking.start_time,
             booking.end_time,
         )

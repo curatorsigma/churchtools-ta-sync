@@ -6,10 +6,9 @@ const BOOKING_DATABASE_NAME: &'static str = ".bookings.db";
 
 /// A single booking for a room
 struct Booking {
-    /// the ID of this bookin in CT
+    /// the ID of this booking in CT
+    /// This is used for matching ressources against rooms defined in the config.
     churchtools_id: i64,
-    /// the name of the room == the name of the ressource in CT
-    room: String,
     /// The booking starts at...
     /// SQLite has no TZ-Aware Datetime type, so this is Naive (timestamp without timezone
     /// information attached).
