@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { version = "0.4.38", features = ["clock", "serde"] }
 serde = { version = "1.0.210", features = ["serde_derive"] }
 serde_yaml = "0.9.34"
 sqlx = { version = "0.8.2", features = ["chrono", "sqlite", "runtime-tokio-rustls"] }
