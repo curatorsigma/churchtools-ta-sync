@@ -1,8 +1,3 @@
-# Database
-## SQL-Schema (sqlite) schreiben
-- Raum, Zeit_von, Zeit_bis, CT-ID der Buchung
-## Migrationen in Rust einbauen
-
 # Data-Gathering
 ## Endpoints von CT-API aufrufen
 ## Daten in Datenbank schreiben
