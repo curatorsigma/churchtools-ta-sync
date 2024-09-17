@@ -6,7 +6,7 @@ use chrono::Utc;
 use itertools::Itertools;
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     config::{ChurchToolsConfig, Config},
@@ -154,14 +154,14 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
 
     // compare the two sources
     // add new bookings
-    debug!("in db: {bookings_from_db:?}");
-    debug!("in ct: {bookings_from_ct:?}");
+    trace!("in db: {bookings_from_db:?}");
+    trace!("in ct: {bookings_from_ct:?}");
     let new_bookings = bookings_from_ct.iter().filter(|b| {
         !bookings_from_db
             .iter()
             .any(|x| x.churchtools_id == b.churchtools_id)
     });
-    debug!(
+    trace!(
         "Adding these bookings: {:?}",
         new_bookings.clone().collect::<Vec<_>>()
     );
@@ -186,10 +186,10 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
 
 pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationToken) {
     info!("Starting CT -> DB Sync task");
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(15));
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
     interval.tick().await;
     loop {
-        // TODO: on Err, keep running and log
+        debug!("Gatherer starting new run.");
         // get new data
         let ct_to_db_res = get_bookings_into_db(config.clone()).await;
         match ct_to_db_res {
@@ -209,6 +209,7 @@ pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationT
         // stop on cancellation or continue after the next tick
         tokio::select! {
             _ = cancel_token.cancelled() => {
+                debug!("Shutting down data gatherer now.");
                 return;
             }
             _ = interval.tick() => {}

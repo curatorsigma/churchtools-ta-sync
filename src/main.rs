@@ -3,6 +3,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
+use tracing::{error, info, warn};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{filter, fmt::format::FmtSpan};
 use tracing_subscriber::{prelude::*, EnvFilter};
@@ -58,16 +59,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
-            dbg!("canceling stuff");
+            info!("Received Ctrl-c. Shutting down.");
             cancel_token.cancel();
         }
         Err(err) => {
-            eprintln!("Unable to listen for shutdown signal: {}", err);
+            error!("Unable to listen for shutdown signal: {}", err);
             // we also shut down in case of error
+            cancel_token.cancel();
         }
     }
 
-    dbg!("now waiting for tasks to shut down");
     // Join both tasks
     let (res,) = tokio::join!(gather_handle);
     res?;

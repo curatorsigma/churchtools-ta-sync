@@ -2,6 +2,7 @@
 
 use chrono::{format::StrftimeItems, DateTime, Local, NaiveDateTime};
 use sqlx::{Pool, Sqlite};
+use tracing::info;
 
 use crate::Booking;
 
@@ -166,6 +167,7 @@ pub async fn update_bookings<'a, I: Iterator<Item = &'a Booking>>(
 ) -> Result<(), DBError> {
     for b in bookings {
         update_booking(db, b).await?;
+        info!("Updated Booking {}. Is now: {:?}", b.churchtools_id, b)
     }
     Ok(())
 }

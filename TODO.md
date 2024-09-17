@@ -1,6 +1,5 @@
-# Data-Gathering
-## Endpoints von CT-API aufrufen
-## Daten in Datenbank schreiben
+# Config
+## Repeat-Zeiten in globale config schreiben
 
 # Piping nach TA
 ## Task, der alle x Minuten die Aktuell benötigten Räume an CMIs schickt
