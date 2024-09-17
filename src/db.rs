@@ -1,6 +1,6 @@
 //! All the db-related functions
 
-use chrono::{format::StrftimeItems, DateTime, Local, NaiveDateTime};
+use chrono::{format::StrftimeItems, DateTime, Local, NaiveDateTime, NaiveTime, Timelike};
 use sqlx::{Pool, Sqlite};
 use tracing::info;
 
@@ -116,6 +116,7 @@ pub async fn insert_bookings<'a, I: Iterator<Item = &'a Booking>>(
 ) -> Result<(), DBError> {
     for b in bookings {
         insert_booking(db, b).await?;
+        info!("Inserted new booking: {b:?}");
     }
     Ok(())
 }
@@ -174,7 +175,10 @@ pub async fn update_bookings<'a, I: Iterator<Item = &'a Booking>>(
 
 /// Delete all bookings from the DB which have ended in the past.
 pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<(), DBError> {
-    let time = chrono::Utc::now().naive_utc();
+    let time = chrono::Utc::now().naive_utc()
+        .with_hour(0).expect("zeroeth hour always exstis")
+        .with_minute(0).expect("zeroeth minute always exstis")
+        .with_second(0).expect("zeroeth second always exstis");
     let fmt = StrftimeItems::new("%Y-%m-%dT%H:%M:%S");
     let time_str = time.format_with_items(fmt).to_string();
     sqlx::query!("DELETE FROM bookings where end_time < ?;", time_str,)
