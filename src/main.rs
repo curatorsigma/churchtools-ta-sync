@@ -1,10 +1,20 @@
+use std::sync::Arc;
+
+use chrono::Utc;
+use tokio_util::sync::CancellationToken;
+
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{filter, fmt::format::FmtSpan};
+use tracing_subscriber::{prelude::*, EnvFilter};
+
 mod config;
-mod get_from_ct;
 mod db;
+mod get_from_ct;
 
 const BOOKING_DATABASE_NAME: &'static str = ".bookings.db";
 
 /// A single booking for a room
+#[derive(Debug, PartialEq)]
 struct Booking {
     /// the ID of this booking in CT
     /// This is used for matching ressources against rooms defined in the config.
@@ -13,26 +23,54 @@ struct Booking {
     /// SQLite has no TZ-Aware Datetime type, so this is Naive (timestamp without timezone
     /// information attached).
     /// ALL DATETIMES ARE UTC.
-    /// Values from Churchtools are coerced to UTC asap.
-    start_time: chrono::NaiveDateTime,
+    start_time: chrono::DateTime<Utc>,
     /// The booking ends at...
-    end_time: chrono::NaiveDateTime,
+    end_time: chrono::DateTime<Utc>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Arc::new(config::Config::create().await?);
     // Setup tracing
 
-    // migrate the database
-    let connect_options = sqlx::sqlite::SqliteConnectOptions::new()
-        .filename(BOOKING_DATABASE_NAME)
-        .create_if_missing(true);
-    let db = sqlx::SqlitePool::connect_with(connect_options).await?;
-    sqlx::migrate!().run(&db).await?;
+    let my_crate_filter = EnvFilter::new("ct_ta_sync");
+    let subscriber = tracing_subscriber::registry().with(my_crate_filter).with(
+        tracing_subscriber::fmt::layer()
+            .compact()
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .with_line_number(true)
+            .with_filter(filter::LevelFilter::TRACE),
+    );
+    tracing::subscriber::set_global_default(subscriber).expect("static tracing config");
 
+    // migrate the database
+    sqlx::migrate!().run(&config.db).await?;
+
+    // cancellation token for the two main processes
+    let cancel_token = CancellationToken::new();
     // start the data-gatherer
+    let gather_handle = tokio::spawn(get_from_ct::keep_db_up_to_date(
+        config,
+        cancel_token.clone(),
+    ));
 
     // start the data-sender
+
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {
+            dbg!("canceling stuff");
+            cancel_token.cancel();
+        }
+        Err(err) => {
+            eprintln!("Unable to listen for shutdown signal: {}", err);
+            // we also shut down in case of error
+        }
+    }
+
+    dbg!("now waiting for tasks to shut down");
+    // Join both tasks
+    let (res,) = tokio::join!(gather_handle);
+    res?;
 
     Ok(())
 }

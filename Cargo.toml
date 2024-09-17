@@ -5,8 +5,13 @@ edition = "2021"
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["clock", "serde"] }
+itertools = "0.13.0"
+reqwest = { version = "0.12.7", features = ["json", "rustls-tls"] }
 serde = { version = "1.0.210", features = ["serde_derive"] }
 serde_yaml = "0.9.34"
 sqlx = { version = "0.8.2", features = ["chrono", "sqlite", "runtime-tokio-rustls"] }
-tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread", "time"] }
-tracing = "0.1.40"
+tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio-util = "0.7.12"
+tracing = { version = "0.1.40", features = ["attributes"] }
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.18", features = ["time", "fmt", "env-filter"] }
