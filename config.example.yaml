@@ -1,3 +1,11 @@
+global:
+  # the frequency with which data is pulled from CT, in sec
+  ct_pull_frequency: 300
+  # the frequency with which data is pushed to TA, in min
+  # (NOTE: minimum frequency is 1min in TA, probably to reduce stress
+  # on the CAN-Bus)
+  ta_push_frequency: 2
+
 # define any number of cmis to which to send data
 cmis:
     # hostname or ip

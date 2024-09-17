@@ -56,7 +56,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     // start the data-sender
-
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
             info!("Received Ctrl-c. Shutting down.");

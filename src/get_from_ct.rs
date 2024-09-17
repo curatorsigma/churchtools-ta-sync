@@ -186,7 +186,7 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
 
 pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationToken) {
     info!("Starting CT -> DB Sync task");
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(config.global.ct_pull_frequency));
     interval.tick().await;
     loop {
         debug!("Gatherer starting new run.");

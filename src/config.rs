@@ -9,6 +9,7 @@ pub(crate) struct ConfigData {
     pub cmis: Vec<CMIConfig>,
     pub external_temperature_sensor: ExtTempConfig,
     pub ct: ChurchToolsConfig,
+    pub global: GlobalConfig,
 }
 #[derive(Debug)]
 pub(crate) struct Config {
@@ -16,6 +17,7 @@ pub(crate) struct Config {
     pub external_temperature_sensor: ExtTempConfig,
     pub ct: ChurchToolsConfig,
     pub db: Pool<Sqlite>,
+    pub global: GlobalConfig,
 }
 impl Config {
     async fn from_config_data(cd: ConfigData) -> Result<Config, sqlx::Error> {
@@ -28,6 +30,7 @@ impl Config {
             external_temperature_sensor: cd.external_temperature_sensor,
             ct: cd.ct,
             db,
+            global: cd.global,
         })
     }
 
@@ -52,6 +55,12 @@ impl Config {
         };
         Ok(Config::from_config_data(config_data).await?)
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct GlobalConfig {
+  pub ct_pull_frequency: u64,
+  pub ta_push_frequency: u32,
 }
 
 #[derive(Debug, Deserialize)]
