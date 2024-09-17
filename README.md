@@ -1,3 +1,5 @@
+![cargo test](https://github.com/curatorsigma/churchtools-ta-sync/actions/workflows/cargo-test.yml/badge.svg)
+
 # What is this repo?
 `ct-ta-sync` reads room bookings from churchtools and forwards that information to a CMI.
 This information may be further used to turn on/off heating etc.
