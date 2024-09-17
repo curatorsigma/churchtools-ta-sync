@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT churchtools_id, start_time, end_time FROM bookings;",
+  "describe": {
+    "columns": [
+      {
+        "name": "churchtools_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "start_time",
+        "ordinal": 1,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "end_time",
+        "ordinal": 2,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "461326058c9cc0780060745d7e5e0b6f3fa474080b8356ef591931b2b01baf06"
+}

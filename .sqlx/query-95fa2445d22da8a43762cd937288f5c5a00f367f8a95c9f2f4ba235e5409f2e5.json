@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE bookings SET start_time = ?, end_time = ? WHERE churchtools_id = ?;\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "95fa2445d22da8a43762cd937288f5c5a00f367f8a95c9f2f4ba235e5409f2e5"
+}
