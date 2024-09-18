@@ -201,7 +201,7 @@ pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationT
         // prune old entries in db
         let db_prune_res = crate::db::prune_old_bookings(&config.db).await;
         match db_prune_res {
-            Ok(()) => debug!("Successfully pruned db."),
+            Ok(x) => debug!("Successfully pruned db. Removed {x} old bookings."),
             Err(e) => {
                 warn!("Failed to prune db. Error encountered: {e}");
             }

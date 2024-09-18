@@ -130,7 +130,7 @@ pub async fn delete_booking(db: &Pool<Sqlite>, booking_id: i64) -> Result<(), DB
     )
     .execute(db)
     .await
-    .map(|_| ())
+    .map(|x| ())
     .map_err(|e| DBError::CannotDeleteBooking(e))
 }
 
@@ -173,8 +173,13 @@ pub async fn update_bookings<'a, I: Iterator<Item = &'a Booking>>(
     Ok(())
 }
 
-/// Delete all bookings from the DB which have ended in the past.
-pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<(), DBError> {
+/// Delete old bookings from the DB
+///
+/// This removes all bookings which have ended anytime before `todayT00:00:00`.
+/// In other words: bookings that have ended today are kept. This is because the CT Rest-API only
+/// allows granularity down to the day. If we removed bookings from earlier today, the same entries
+/// would constantly get rewritten and repruned.
+pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<u64, DBError> {
     let time = chrono::Utc::now().naive_utc()
         .with_hour(0).expect("zeroeth hour always exstis")
         .with_minute(0).expect("zeroeth minute always exstis")
@@ -184,7 +189,7 @@ pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<(), DBError> {
     sqlx::query!("DELETE FROM bookings where end_time < ?;", time_str,)
         .execute(db)
         .await
-        .map(|_| ())
+        .map(|x| x.rows_affected())
         .map_err(|e| DBError::CannotDeleteBooking(e))
 }
 
@@ -345,7 +350,8 @@ mod tests {
         };
         insert_bookings(&pool, vec![&booking_yesterday, &booking_today].into_iter()).await.unwrap();
         // prune
-        prune_old_bookings(&pool).await.unwrap();
+        let rows_changed = prune_old_bookings(&pool).await.unwrap();
+        assert_eq!(rows_changed, 1);
         // check that only the one from tomorrow survives
         let bookings = get_all_bookings(&pool).await.unwrap();
         assert_eq!(bookings.len(), 1);
