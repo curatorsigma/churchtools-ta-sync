@@ -4,14 +4,13 @@ use std::sync::Arc;
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
-use tracing::{error, info, warn};
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing::{error, info};
 use tracing_subscriber::{filter, fmt::format::FmtSpan};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 mod config;
 mod db;
-mod get_from_ct;
+mod pull_from_ct;
 
 const BOOKING_DATABASE_NAME: &'static str = ".bookings.db";
 
@@ -50,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // cancellation token for the two main processes
     let cancel_token = CancellationToken::new();
     // start the data-gatherer
-    let gather_handle = tokio::spawn(get_from_ct::keep_db_up_to_date(
+    let gather_handle = tokio::spawn(pull_from_ct::keep_db_up_to_date(
         config,
         cancel_token.clone(),
     ));
