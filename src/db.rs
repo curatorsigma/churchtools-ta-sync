@@ -192,7 +192,7 @@ pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<(), DBError> {
 mod tests {
     use super::*;
 
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, TimeDelta};
     use sqlx::SqlitePool;
 
     #[sqlx::test(fixtures("001_good_data"))]
@@ -324,5 +324,31 @@ mod tests {
         let bookings = get_bookings_in_timeframe(&pool, start, end).await.unwrap();
         assert_eq!(bookings.len(), 1);
         assert_eq!(bookings[0], new_booking);
+    }
+
+    #[sqlx::test(fixtures("002_empty"))]
+    fn test_pruning(pool: SqlitePool) {
+        // insert booking for today and tomorrow
+        let now = chrono::Utc::now().with_nanosecond(0).unwrap();
+        let in_an_hour = now + TimeDelta::hours(1);
+        let booking_today = Booking {
+            churchtools_id: 9999,
+            start_time: now,
+            end_time: in_an_hour,
+        };
+        let yesterday = now - TimeDelta::days(1);
+        let yesterday_plus_one_hour = yesterday + TimeDelta::hours(1);
+        let booking_yesterday = Booking {
+            churchtools_id: 8888,
+            start_time: yesterday,
+            end_time: yesterday_plus_one_hour,
+        };
+        insert_bookings(&pool, vec![&booking_yesterday, &booking_today].into_iter()).await.unwrap();
+        // prune
+        prune_old_bookings(&pool).await.unwrap();
+        // check that only the one from tomorrow survives
+        let bookings = get_all_bookings(&pool).await.unwrap();
+        assert_eq!(bookings.len(), 1);
+        assert_eq!(bookings[0], booking_today);
     }
 }

@@ -21,8 +21,6 @@ struct Booking {
     /// This is used for matching ressources against rooms defined in the config.
     churchtools_id: i64,
     /// The booking starts at...
-    /// SQLite has no TZ-Aware Datetime type, so this is Naive (timestamp without timezone
-    /// information attached).
     /// ALL DATETIMES ARE UTC.
     start_time: chrono::DateTime<Utc>,
     /// The booking ends at...
