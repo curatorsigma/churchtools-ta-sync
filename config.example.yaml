@@ -5,6 +5,14 @@ global:
   # (NOTE: minimum frequency is 1min in TA, probably to reduce stress
   # on the CAN-Bus)
   ta_push_frequency: 2
+  # which verbosity level should be logged?
+  # allowed values are:
+  # error
+  # warn
+  # info
+  # debug
+  # trace
+  log_level: "debug"
 
 # define any number of cmis to which to send data
 cmis:

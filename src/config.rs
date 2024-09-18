@@ -61,6 +61,7 @@ impl Config {
 pub(crate) struct GlobalConfig {
   pub ct_pull_frequency: u64,
   pub ta_push_frequency: u32,
+  pub log_level: String,
 }
 
 #[derive(Debug, Deserialize)]

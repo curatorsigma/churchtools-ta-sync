@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -33,12 +34,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup tracing
 
     let my_crate_filter = EnvFilter::new("ct_ta_sync");
+    let level_filter = filter::LevelFilter::from_str(&config.global.log_level)?;
     let subscriber = tracing_subscriber::registry().with(my_crate_filter).with(
         tracing_subscriber::fmt::layer()
             .compact()
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .with_line_number(true)
-            .with_filter(filter::LevelFilter::TRACE),
+            .with_filter(level_filter),
     );
     tracing::subscriber::set_global_default(subscriber).expect("static tracing config");
 
