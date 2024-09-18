@@ -186,7 +186,9 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
 
 pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationToken) {
     info!("Starting CT -> DB Sync task");
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(config.global.ct_pull_frequency));
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
+        config.global.ct_pull_frequency,
+    ));
     interval.tick().await;
     loop {
         debug!("Gatherer starting new run.");
@@ -201,11 +203,9 @@ pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationT
         // prune old entries in db
         let db_prune_res = crate::db::prune_old_bookings(&config.db).await;
         match db_prune_res {
-            Ok(x) => {
-                match x {
-                    0 => debug!("Successfully pruned db. Removed {x} old bookings."),
-                    y => info!("Successfully pruned db. Removed {y} old bookings."),
-                }
+            Ok(x) => match x {
+                0 => debug!("Successfully pruned db. Removed {x} old bookings."),
+                y => info!("Successfully pruned db. Removed {y} old bookings."),
             },
             Err(e) => {
                 warn!("Failed to prune db. Error encountered: {e}");

@@ -13,6 +13,33 @@ global:
   # debug
   # trace
   log_level: "debug"
+  # Set the address to bind on when sending data to CMI
+  cmi_bind_addr: "0.0.0.0"
+
+rooms:
+  # name of the room. must match occurances later on
+  room1:
+    # id of the ressource in CT.
+    # this is used to actually map ressources to rooms
+    churchtools_id: 41
+    # OPTION
+    # number of minutes the room takes to be heated from
+    # unheated to heated state
+    # default: 30
+    # max: 255
+    preheat_mins: 30
+    # OPTION
+    # max number of minutes the room may be unheated before
+    # the end of a booking
+    # default: 10
+    # max: 255
+    preshutdown_mins: 10
+  room6:
+    churchtools_id: 42
+    preheat_mins: 20
+  room2:
+    churchtools_id: 56
+
 
 # define any number of cmis to which to send data
 cmis:
@@ -22,26 +49,20 @@ cmis:
     our_virtual_can_id: 59
     # rooms to push data for to this bus
     rooms:
-      # name (human readable, HAS NO SEMANTIC)
     - name: room1
-      # id of the ressource in CT.
-      # this is used to actually map ressources to rooms
-      churchtools_id: 41
       # the output index to send this value from on the CAN Bus
       pdo_index: 1
     - name: room6
-      churchtools_id: 42
       pdo_index: 2
   - host: 10.15.6.6
     our_virtual_can_id: 12
     rooms:
-      # notice that rooms (ct_id, name) can be overlapping
-      # here, the data for room 1 is sent to both the CMI at hostname.example.com and at 10.15.6.6
+    # notice that rooms can be overlapping
+    # here, the data for room 1 is sent to both the CMI at hostname.example.com and at 10.15.6.6
+    # but to different pdo_indices in the CAN network
     - name: room1
-      churchtools_id: 41
-      pdo_index: 1
+      pdo_index: 8
     - name: room2
-      churchtools_id: 56
       pdo_index: 2
 
 # we scale hold over time based on external temperature

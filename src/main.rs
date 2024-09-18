@@ -11,6 +11,7 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 mod config;
 mod db;
 mod pull_from_ct;
+mod push_to_ta;
 
 const BOOKING_DATABASE_NAME: &'static str = ".bookings.db";
 
@@ -50,11 +51,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cancel_token = CancellationToken::new();
     // start the data-gatherer
     let gather_handle = tokio::spawn(pull_from_ct::keep_db_up_to_date(
-        config,
+        config.clone(),
         cancel_token.clone(),
     ));
 
     // start the data-sender
+    let gather_handle = tokio::spawn(push_to_ta::push_coe(
+        config.clone(),
+        cancel_token.clone(),
+    ));
+
+    // wait for a shutdown signal
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
             info!("Received Ctrl-c. Shutting down.");

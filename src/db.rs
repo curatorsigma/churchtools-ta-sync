@@ -94,7 +94,10 @@ pub async fn get_bookings_in_timeframe(
 /// Insert a booking into the DB
 pub async fn insert_booking(db: &Pool<Sqlite>, booking: &Booking) -> Result<(), DBError> {
     let fmt = StrftimeItems::new("%Y-%m-%dT%H:%M:%S");
-    let start_str = booking.start_time.format_with_items(fmt.clone()).to_string();
+    let start_str = booking
+        .start_time
+        .format_with_items(fmt.clone())
+        .to_string();
     let end_str = booking.end_time.format_with_items(fmt.clone()).to_string();
     sqlx::query!(
         "INSERT INTO bookings (churchtools_id, start_time, end_time) VALUES \
@@ -146,7 +149,10 @@ pub async fn delete_bookings<'a, I: Iterator<Item = i64>>(
 
 pub async fn update_booking(db: &Pool<Sqlite>, booking: &Booking) -> Result<(), DBError> {
     let fmt = StrftimeItems::new("%Y-%m-%dT%H:%M:%S");
-    let start_time = booking.start_time.format_with_items(fmt.clone()).to_string();
+    let start_time = booking
+        .start_time
+        .format_with_items(fmt.clone())
+        .to_string();
     let end_time = booking.end_time.format_with_items(fmt).to_string();
     sqlx::query!(
         "UPDATE bookings SET start_time = ?, end_time = ? \
@@ -180,10 +186,14 @@ pub async fn update_bookings<'a, I: Iterator<Item = &'a Booking>>(
 /// allows granularity down to the day. If we removed bookings from earlier today, the same entries
 /// would constantly get rewritten and repruned.
 pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<u64, DBError> {
-    let time = chrono::Utc::now().naive_utc()
-        .with_hour(0).expect("zeroeth hour always exstis")
-        .with_minute(0).expect("zeroeth minute always exstis")
-        .with_second(0).expect("zeroeth second always exstis");
+    let time = chrono::Utc::now()
+        .naive_utc()
+        .with_hour(0)
+        .expect("zeroeth hour always exstis")
+        .with_minute(0)
+        .expect("zeroeth minute always exstis")
+        .with_second(0)
+        .expect("zeroeth second always exstis");
     let fmt = StrftimeItems::new("%Y-%m-%dT%H:%M:%S");
     let time_str = time.format_with_items(fmt).to_string();
     sqlx::query!("DELETE FROM bookings where end_time < ?;", time_str,)
@@ -348,7 +358,9 @@ mod tests {
             start_time: yesterday,
             end_time: yesterday_plus_one_hour,
         };
-        insert_bookings(&pool, vec![&booking_yesterday, &booking_today].into_iter()).await.unwrap();
+        insert_bookings(&pool, vec![&booking_yesterday, &booking_today].into_iter())
+            .await
+            .unwrap();
         // prune
         let rows_changed = prune_old_bookings(&pool).await.unwrap();
         assert_eq!(rows_changed, 1);
