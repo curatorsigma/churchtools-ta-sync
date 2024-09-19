@@ -175,9 +175,9 @@ dependencies = [
 
 [[package]]
 name = "coe"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cab2c1c1bb38e7437237423a6a830b86864487836379c484298eecf4c99c1cce"
+checksum = "6bb43165bb88e2f9be2c171adc3028858292e43471b10a6c1c0c1109436ddad9"
 dependencies = [
  "serde",
 ]

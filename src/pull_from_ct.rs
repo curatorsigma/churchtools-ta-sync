@@ -11,7 +11,7 @@ use tracing::{debug, info, trace, warn};
 use crate::{
     config::{ChurchToolsConfig, Config},
     db::DBError,
-    Booking,
+    Booking, InShutdown,
 };
 
 #[derive(Debug, Deserialize)]
@@ -184,7 +184,7 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     Ok(())
 }
 
-pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationToken) {
+pub async fn keep_db_up_to_date(config: Arc<Config>, mut watcher: tokio::sync::watch::Receiver<InShutdown>) {
     info!("Starting CT -> DB Sync task");
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
         config.global.ct_pull_frequency,
@@ -213,7 +213,7 @@ pub async fn keep_db_up_to_date(config: Arc<Config>, cancel_token: CancellationT
         };
         // stop on cancellation or continue after the next tick
         tokio::select! {
-            _ = cancel_token.cancelled() => {
+            _ = watcher.changed() => {
                 debug!("Shutting down data gatherer now.");
                 return;
             }

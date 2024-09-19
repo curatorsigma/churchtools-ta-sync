@@ -20,10 +20,7 @@ impl std::fmt::Display for CreateConfigError {
                 )
             }
             Self::PDOIndexOutOfBounds(x) => {
-                write!(
-                    f,
-                    "PDO Index {x} is not within 1-64"
-                )
+                write!(f, "PDO Index {x} is not within 1-64")
             }
         }
     }
@@ -72,7 +69,11 @@ impl Config {
                                 name: room.name,
                                 pdo_index: if room.pdo_index >= 1 && room.pdo_index <= 64 {
                                     room.pdo_index - 1
-                                } else { return Err(CreateConfigError::PDOIndexOutOfBounds(room.pdo_index)) },
+                                } else {
+                                    return Err(CreateConfigError::PDOIndexOutOfBounds(
+                                        room.pdo_index,
+                                    ));
+                                },
                                 churchtools_id: room_data.churchtools_id,
                                 preheat_minutes: room_data.preheat_minutes.unwrap_or(30),
                                 preshutdown_minutes: room_data.preshutdown_minutes.unwrap_or(10),
@@ -83,9 +84,21 @@ impl Config {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        // shift the pdo_offset for the external_temperature_sensor data by one:
+        let ext_temp_config = ExtTempConfig {
+            bind_addr: cd.external_temperature_sensor.bind_addr,
+            can_id: cd.external_temperature_sensor.can_id,
+            pdo_index: if (1..=64).contains(&cd.external_temperature_sensor.pdo_index) {
+                cd.external_temperature_sensor.pdo_index - 1
+            } else {
+                return Err(Box::new(CreateConfigError::PDOIndexOutOfBounds(cd.external_temperature_sensor.pdo_index)));
+            },
+            timeout: cd.external_temperature_sensor.timeout,
+        };
+
         Ok(Config {
             cmis,
-            external_temperature_sensor: cd.external_temperature_sensor,
+            external_temperature_sensor: ext_temp_config,
             ct: cd.ct,
             db,
             global: cd.global,
@@ -149,30 +162,46 @@ impl AssociatedRoomConfig {
     /// Calculate the amount of minutes a room should be preheated, depending on the the
     /// base_preheating time set in the config and the external temperature
     ///
-    /// external_temp is given in Tenths of a Degree Centigrade
-    fn preheat_time(&self, external_temp: i32) -> u8 {
-        let clamped_external_temp: f64 =
-            std::cmp::max(-10, std::cmp::min(external_temp, 20)) as f64;
-        let time_proportion = (clamped_external_temp + 10_f64) / 30_f64;
-        (self.preheat_minutes as f64 * (1_f64 - time_proportion)).round() as u8
+    /// external temperature is expected in tenths of a Degree Centigrade
+    /// if external_temp is None, we do not scale the base shutdowns at all.
+    fn preheat_time(&self, external_temp: Option<i32>) -> u8 {
+        if let Some(x) = external_temp {
+            let clamped_external_temp: f64 =
+                std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
+            let time_proportion = (clamped_external_temp + 100_f64) / 30_f64;
+            (self.preheat_minutes as f64 * (1_f64 - time_proportion)).round() as u8
+        } else {
+            self.preheat_minutes
+        }
     }
 
     /// Calculate the amount of minutes a rooms heating may be shut down BEFORE the end of a booking
     /// base_preshutdown time set in the config and the external temperature
     ///
-    /// external_temp is given in Tenths of a Degree Centigrade
-    fn preshutdown_time(&self, external_temp: i32) -> u8 {
-        let clamped_external_temp: f64 =
-            std::cmp::max(-10, std::cmp::min(external_temp, 20)) as f64;
-        let time_proportion = (clamped_external_temp + 10_f64) / 30_f64;
-        (self.preshutdown_minutes as f64 * time_proportion).round() as u8
+    /// external temperature is expected in tenths of a Degree Centigrade
+    /// if external_temp is None, we do not scale the base shutdowns at all.
+    fn preshutdown_time(&self, external_temp: Option<i32>) -> u8 {
+        if let Some(x) = external_temp {
+            let clamped_external_temp: f64 =
+                std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
+            let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
+            (self.preshutdown_minutes as f64 * time_proportion).round() as u8
+        } else {
+            self.preshutdown_minutes
+        }
     }
 
+    /// Apply both prehead and preshutdown times, depending on this rooms configuration.
+    /// Return the real start and real end time (i.e. the times where we have to start heating or
+    /// are allowed to stop heating).
+    ///
+    /// external temperature is expected in tenths of a Degree Centigrade
+    /// if external_temp is None, we do not scale the base shutdowns at all.
     pub fn apply_preheat_and_preshutdown(
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-        external_temp: i32,
+        external_temp: Option<i32>,
     ) -> (DateTime<Utc>, DateTime<Utc>) {
         let new_start = start - TimeDelta::minutes(self.preheat_time(external_temp).into());
         let new_end = end - TimeDelta::minutes(self.preshutdown_time(external_temp).into());
