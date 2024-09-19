@@ -2,7 +2,7 @@ services:
   ct-ta-sync:
     build: .
     ports:
-      - 5442:5442
+    - "5442:5442/udp"
     volumes:
     - type: bind
       source: /etc/ct-ta-sync/config.yaml
