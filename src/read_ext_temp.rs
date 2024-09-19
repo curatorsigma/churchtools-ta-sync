@@ -25,7 +25,7 @@ pub async fn read_next_ext_temp_packet(sock: &UdpSocket, can_id: u8, pdo_index: 
                                     AnalogueCOEValue::DegreeCentigrade_Tens(x),
                                 ) = payload.value()
                                 {
-                                    debug!("Got a correctly formatted Value for the external temperature: {x}");
+                                    debug!("Got the external temperature: {} °C", x as f32 / 10_f32);
                                     return x;
                                 } else {
                                     trace!("Got Payload for correct ID and Index, but the Unit was not Degree Centigrade ({}).", payload.unit_id());
