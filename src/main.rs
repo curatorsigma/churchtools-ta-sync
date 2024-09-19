@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use tokio::sync::RwLock;
-use tokio_util::sync::CancellationToken;
 
 use tracing::{error, info};
 use tracing_subscriber::{filter, fmt::format::FmtSpan};
@@ -15,7 +14,7 @@ mod pull_from_ct;
 mod push_to_ta;
 mod read_ext_temp;
 
-const BOOKING_DATABASE_NAME: &'static str = ".bookings.db";
+const BOOKING_DATABASE_NAME: &str = ".bookings.db";
 
 /// A single booking for a room
 #[derive(Debug, PartialEq)]
@@ -78,9 +77,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // migrate the database
     sqlx::migrate!().run(&config.db).await?;
-
-    // cancellation token for the two main processes
-    let cancel_token = CancellationToken::new();
 
     // the external temperature
     let external_temperature = Arc::new(RwLock::new(None));

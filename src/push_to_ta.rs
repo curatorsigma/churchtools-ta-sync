@@ -15,25 +15,25 @@ use crate::{
 /// All the things that can go wrong while emiting COE Packets
 pub enum COEEmitError {
     /// Getting data from the DB failed
-    DB(DBError),
-    /// Sending packets via UDP failed
-    UDP(std::io::Error),
+    Db(DBError),
+    /// Sending packets via Udp failed
+    Udp(std::io::Error),
 }
 impl From<DBError> for COEEmitError {
     fn from(value: DBError) -> Self {
-        Self::DB(value)
+        Self::Db(value)
     }
 }
 impl From<std::io::Error> for COEEmitError {
     fn from(value: std::io::Error) -> Self {
-        Self::UDP(value)
+        Self::Udp(value)
     }
 }
 impl std::fmt::Display for COEEmitError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::DB(e) => write!(f, "DBError: {e}"),
-            Self::UDP(e) => write!(f, "UDP Error: {e}"),
+            Self::Db(e) => write!(f, "DBError: {e}"),
+            Self::Udp(e) => write!(f, "Udp Error: {e}"),
         }
     }
 }

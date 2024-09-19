@@ -38,20 +38,20 @@ struct BookingsDataCalculated {
 
 #[derive(Debug)]
 pub enum CTApiError {
-    CannotGetBookings(reqwest::Error),
-    CannotDeserialize(reqwest::Error),
-    CannotParseTime(chrono::ParseError),
+    GetBookings(reqwest::Error),
+    Deserialize(reqwest::Error),
+    ParseTime(chrono::ParseError),
 }
 impl std::fmt::Display for CTApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::CannotGetBookings(e) => {
+            Self::GetBookings(e) => {
                 write!(f, "Cannot get bookings. reqwest Error: {e}")
             }
-            Self::CannotDeserialize(e) => {
+            Self::Deserialize(e) => {
                 write!(f, "Cannot deserialize the response. reqwest Error: {e}")
             }
-            Self::CannotParseTime(e) => {
+            Self::ParseTime(e) => {
                 write!(
                     f,
                     "Cannot parse a time contained in CTs response. chrono Error: {e}"
@@ -96,8 +96,7 @@ async fn get_relevant_bookings(
     let mut query_strings = config
         .cmis
         .iter()
-        .map(|cmi| &cmi.rooms)
-        .flatten()
+        .flat_map(|cmi| &cmi.rooms)
         .map(|room_config| room_config.churchtools_id)
         .unique()
         // we now have the resource ids we care about
@@ -115,10 +114,10 @@ async fn get_relevant_bookings(
         .header("Authorization", format!("Login {}", config.ct.login_token))
         .send()
         .await
-        .map_err(|e| CTApiError::CannotGetBookings(e))?
+        .map_err(CTApiError::GetBookings)?
         .json::<CTBookingsResponse>()
         .await
-        .map_err(|e| CTApiError::CannotDeserialize(e))?;
+        .map_err(CTApiError::Deserialize)?;
     response
         .data
         .into_iter()
@@ -126,12 +125,12 @@ async fn get_relevant_bookings(
             Ok::<Booking, CTApiError>(Booking {
                 churchtools_id: x.base.id,
                 start_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.start_date)
-                    .map_err(|e| CTApiError::CannotParseTime(e))?
+                    .map_err(CTApiError::ParseTime)?
                     // we get the date from CT with an unknown offset, and need to cast to UTC
                     // (actually, CT seems to always return UTC, but this is not part of a stably documented API)
                     .into(),
                 end_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.end_date)
-                    .map_err(|e| CTApiError::CannotParseTime(e))?
+                    .map_err(CTApiError::ParseTime)?
                     .into(),
             })
         })

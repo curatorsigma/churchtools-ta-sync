@@ -26,27 +26,27 @@ impl NaiveBooking {
 
 #[derive(Debug)]
 pub enum DBError {
-    CannotSelectBookings(sqlx::Error),
-    CannotInsertBooking(sqlx::Error),
-    CannotDeleteBooking(sqlx::Error),
-    CannotUpdateBooking(sqlx::Error),
+    SelectBookings(sqlx::Error),
+    InsertBooking(sqlx::Error),
+    DeleteBooking(sqlx::Error),
+    UpdateBooking(sqlx::Error),
 }
 impl std::fmt::Display for DBError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::CannotSelectBookings(e) => {
+            Self::SelectBookings(e) => {
                 write!(
                     f,
                     "Unable to select bookings from the DB. Inner Error: {e}."
                 )
             }
-            Self::CannotInsertBooking(e) => {
+            Self::InsertBooking(e) => {
                 write!(f, "Unable to insert booking into the DB. Inner Error: {e}.")
             }
-            Self::CannotUpdateBooking(e) => {
+            Self::UpdateBooking(e) => {
                 write!(f, "Unable to update booking in the DB. Inner Error: {e}.")
             }
-            Self::CannotDeleteBooking(e) => {
+            Self::DeleteBooking(e) => {
                 write!(f, "Unable to delete booking from the DB. Inner Error: {e}.")
             }
         }
@@ -61,7 +61,7 @@ pub async fn get_all_bookings(db: &Pool<Sqlite>) -> Result<Vec<Booking>, DBError
     )
     .fetch_all(db)
     .await
-    .map_err(|e| DBError::CannotSelectBookings(e))?
+    .map_err(DBError::SelectBookings)?
     .into_iter()
     .map(|x| x.interpret_as_utc())
     .collect::<Vec<_>>())
@@ -85,7 +85,7 @@ pub async fn get_bookings_in_timeframe(
     )
     .fetch_all(db)
     .await
-    .map_err(|e| DBError::CannotSelectBookings(e))?
+    .map_err(DBError::SelectBookings)?
     .into_iter()
     .map(|x| x.interpret_as_utc())
     .collect::<Vec<_>>())
@@ -110,7 +110,7 @@ pub async fn insert_booking(db: &Pool<Sqlite>, booking: &Booking) -> Result<(), 
     .execute(db)
     .await
     .map(|_| ())
-    .map_err(|e| DBError::CannotInsertBooking(e))
+    .map_err(DBError::InsertBooking)
 }
 
 pub async fn insert_bookings<'a, I: Iterator<Item = &'a Booking>>(
@@ -134,7 +134,7 @@ pub async fn delete_booking(db: &Pool<Sqlite>, booking_id: i64) -> Result<(), DB
     .execute(db)
     .await
     .map(|_| ())
-    .map_err(|e| DBError::CannotDeleteBooking(e))
+    .map_err(DBError::DeleteBooking)
 }
 
 pub async fn delete_bookings<'a, I: Iterator<Item = i64>>(
@@ -165,7 +165,7 @@ pub async fn update_booking(db: &Pool<Sqlite>, booking: &Booking) -> Result<(), 
     .execute(db)
     .await
     .map(|_| ())
-    .map_err(|e| DBError::CannotUpdateBooking(e))
+    .map_err(DBError::UpdateBooking)
 }
 
 pub async fn update_bookings<'a, I: Iterator<Item = &'a Booking>>(
@@ -200,7 +200,7 @@ pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<u64, DBError> {
         .execute(db)
         .await
         .map(|x| x.rows_affected())
-        .map_err(|e| DBError::CannotDeleteBooking(e))
+        .map_err(DBError::DeleteBooking)
 }
 
 #[cfg(test)]

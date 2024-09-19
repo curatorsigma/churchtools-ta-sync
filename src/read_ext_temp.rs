@@ -49,18 +49,18 @@ pub async fn read_next_ext_temp_packet(sock: &UdpSocket, can_id: u8, pdo_index: 
 
 #[derive(Debug)]
 pub enum ReadExtTempError {
-    UDP(std::io::Error),
+    Udp(std::io::Error),
 }
 impl std::fmt::Display for ReadExtTempError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::UDP(x) => write!(f, "UDP Error: {x}"),
+            Self::Udp(x) => write!(f, "Udp Error: {x}"),
         }
     }
 }
 impl From<std::io::Error> for ReadExtTempError {
     fn from(value: std::io::Error) -> Self {
-        Self::UDP(value)
+        Self::Udp(value)
     }
 }
 impl std::error::Error for ReadExtTempError {}
@@ -76,7 +76,7 @@ pub async fn read_ext_temp(
     shutdown_tx: tokio::sync::watch::Sender<InShutdown>,
 ) -> Result<(), ReadExtTempError> {
     info!("Starting external temperature receiver");
-    // crate UDP socket
+    // crate Udp socket
     let sock =
         match UdpSocket::bind((config.external_temperature_sensor.bind_addr.clone(), 5442)).await {
             Ok(x) => x,

@@ -126,7 +126,7 @@ impl Config {
                 return Err(Box::new(e));
             }
         };
-        Ok(Config::from_config_data(config_data).await?)
+        Config::from_config_data(config_data).await
     }
 }
 
@@ -168,7 +168,7 @@ impl AssociatedRoomConfig {
     /// if external_temp is None, we do not scale the base shutdowns at all.
     fn preheat_time(&self, external_temp: Option<i32>) -> u8 {
         if let Some(x) = external_temp {
-            let clamped_external_temp: f64 = std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
+            let clamped_external_temp: f64 = x.clamp(-100, 200) as f64;
             let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
             (self.preheat_minutes as f64 * (1_f64 - time_proportion)).round() as u8
         } else {
@@ -183,7 +183,7 @@ impl AssociatedRoomConfig {
     /// if external_temp is None, we do not scale the base shutdowns at all.
     fn preshutdown_time(&self, external_temp: Option<i32>) -> u8 {
         if let Some(x) = external_temp {
-            let clamped_external_temp: f64 = std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
+            let clamped_external_temp: f64 = x.clamp(-100, 200) as f64;
             let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
             (self.preshutdown_minutes as f64 * time_proportion).round() as u8
         } else {
@@ -206,7 +206,7 @@ impl AssociatedRoomConfig {
     ) -> (DateTime<Utc>, DateTime<Utc>) {
         let new_start = start - TimeDelta::minutes(self.preheat_time(external_temp).into());
         let new_end = end - TimeDelta::minutes(self.preshutdown_time(external_temp).into());
-        return (new_start, new_end);
+        (new_start, new_end)
     }
 }
 
