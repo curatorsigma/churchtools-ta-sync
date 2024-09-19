@@ -196,10 +196,15 @@ pub(crate) struct AssociatedRoomConfigData {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ExtTempConfig {
-    bind_addr: String,
-    can_id: u8,
-    pdo_index: u8,
-    timeout: u8,
+    /// IP Address to bind a receiving UDP socket on. Port is 5442
+    pub bind_addr: String,
+    /// Can ID to expect - other ids are ignored
+    pub can_id: u8,
+    /// PDO Index to expect - other ids are ignored
+    pub pdo_index: u8,
+    /// number of minutes to wait for a packet to the correct Can-ID, PDO.
+    /// After this time, the external temperature is not considered anymore
+    pub timeout: u8,
 }
 
 #[derive(Deserialize)]

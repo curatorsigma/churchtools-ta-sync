@@ -12,6 +12,7 @@ mod config;
 mod db;
 mod pull_from_ct;
 mod push_to_ta;
+mod read_ext_temp;
 
 const BOOKING_DATABASE_NAME: &'static str = ".bookings.db";
 
