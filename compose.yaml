@@ -1,0 +1,11 @@
+services:
+  ct-ta-sync:
+    build: .
+    ports:
+      - 5442:5442
+    volumes:
+    - type: bind
+      source: /etc/ct-ta-sync/config.yaml
+      target: /etc/ct-ta-sync/config.yaml
+      read_only: true
+
