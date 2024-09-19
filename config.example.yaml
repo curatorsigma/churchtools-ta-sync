@@ -14,7 +14,7 @@ global:
   # trace
   log_level: "debug"
   # Set the address to bind on when sending data to CMI
-  cmi_bind_addr: "0.0.0.0"
+  emiter_bind_addr: "0.0.0.0"
 
 rooms:
   # name of the room. must match occurances later on

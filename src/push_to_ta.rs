@@ -45,7 +45,7 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
     let end = start + TimeDelta::minutes(30);
     let bookings = get_bookings_in_timeframe(&config.db, start, end).await?;
 
-    let sock = UdpSocket::bind((config.global.cmi_bind_addr.clone(), 0)).await?;
+    let sock = UdpSocket::bind((config.global.emiter_bind_addr.clone(), 0)).await?;
     // for each CMI: send either on or off for the rooms we care about
     for cmi in &config.cmis {
         // calculate their preheating-times and cooldown-times

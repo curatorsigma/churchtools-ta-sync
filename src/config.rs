@@ -142,7 +142,7 @@ pub(crate) struct GlobalConfig {
     pub ct_pull_frequency: u64,
     pub ta_push_frequency: u64,
     pub log_level: String,
-    pub cmi_bind_addr: String,
+    pub emiter_bind_addr: String,
 }
 
 #[derive(Debug)]
