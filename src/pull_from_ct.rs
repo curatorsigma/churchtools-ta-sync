@@ -5,11 +5,10 @@ use std::sync::Arc;
 use chrono::Utc;
 use itertools::Itertools;
 use serde::Deserialize;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use crate::{
-    config::{ChurchToolsConfig, Config},
+    config::Config,
     db::DBError,
     Booking, InShutdown,
 };
@@ -184,7 +183,10 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     Ok(())
 }
 
-pub async fn keep_db_up_to_date(config: Arc<Config>, mut watcher: tokio::sync::watch::Receiver<InShutdown>) {
+pub async fn keep_db_up_to_date(
+    config: Arc<Config>,
+    mut watcher: tokio::sync::watch::Receiver<InShutdown>,
+) {
     info!("Starting CT -> DB Sync task");
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
         config.global.ct_pull_frequency,

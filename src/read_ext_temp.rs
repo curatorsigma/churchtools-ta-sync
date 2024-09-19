@@ -2,9 +2,8 @@
 
 use std::sync::Arc;
 
-use coe::{AnalogueCOEValue, COEValue, Packet, Payload};
+use coe::{AnalogueCOEValue, COEValue, Packet};
 use tokio::{net::UdpSocket, sync::RwLock};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{config::Config, InShutdown};
@@ -78,14 +77,15 @@ pub async fn read_ext_temp(
 ) -> Result<(), ReadExtTempError> {
     info!("Starting external temperature receiver");
     // crate UDP socket
-    let sock = match UdpSocket::bind((config.external_temperature_sensor.bind_addr.clone(), 5442)).await {
-        Ok(x) => x,
-        Err(e) => {
-            error!("Unable to open Udp Socket to listen for incoming external temperature.");
-            shutdown_tx.send_replace(InShutdown::Yes);
-            return Err(e.into());
-        }
-    };
+    let sock =
+        match UdpSocket::bind((config.external_temperature_sensor.bind_addr.clone(), 5442)).await {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Unable to open Udp Socket to listen for incoming external temperature.");
+                shutdown_tx.send_replace(InShutdown::Yes);
+                return Err(e.into());
+            }
+        };
 
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
         config.external_temperature_sensor.timeout as u64 * 60,

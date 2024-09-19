@@ -35,7 +35,10 @@ enum InShutdown {
     No,
 }
 
-async fn signal_handler(mut watcher: tokio::sync::watch::Receiver<InShutdown>, shutdown_tx: tokio::sync::watch::Sender<InShutdown>) {
+async fn signal_handler(
+    mut watcher: tokio::sync::watch::Receiver<InShutdown>,
+    shutdown_tx: tokio::sync::watch::Sender<InShutdown>,
+) {
     // wait for a shutdown signal
     tokio::select! {
         // shutdown the signal handler when some other process signals a shutdown
@@ -56,7 +59,6 @@ async fn signal_handler(mut watcher: tokio::sync::watch::Receiver<InShutdown>, s
         }
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -87,10 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = tokio::sync::watch::channel(InShutdown::No);
 
     // start the data-gatherer
-    let gatherer_handle = tokio::spawn(pull_from_ct::keep_db_up_to_date(
-        config.clone(),
-        rx,
-    ));
+    let gatherer_handle = tokio::spawn(pull_from_ct::keep_db_up_to_date(config.clone(), rx));
 
     // start the data-sender
     let emitter_handle = tokio::spawn(push_to_ta::push_coe(
@@ -111,7 +110,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signal_handle = tokio::spawn(signal_handler(tx.subscribe(), tx.clone()));
 
     // Join both tasks
-    let (gather_res, emit_res, receive_res, signal_res,) = tokio::join!(gatherer_handle, emitter_handle, receiver_handle, signal_handle);
+    let (gather_res, emit_res, receive_res, signal_res) = tokio::join!(
+        gatherer_handle,
+        emitter_handle,
+        receiver_handle,
+        signal_handle
+    );
     gather_res?;
     emit_res?;
     receive_res??;

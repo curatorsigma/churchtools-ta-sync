@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use chrono::{TimeDelta, Utc};
 use tokio::{net::UdpSocket, sync::RwLock};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use crate::{
     config::Config,
-    db::{get_bookings_in_timeframe, DBError}, InShutdown,
+    db::{get_bookings_in_timeframe, DBError},
+    InShutdown,
 };
 
 /// All the things that can go wrong while emiting COE Packets
@@ -89,7 +89,11 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
 }
 
 /// Continually push data from the db to CMIs.
-pub async fn push_coe(config: Arc<Config>, mut watcher: tokio::sync::watch::Receiver<InShutdown>, ext_temp: Arc<RwLock<Option<i32>>>) {
+pub async fn push_coe(
+    config: Arc<Config>,
+    mut watcher: tokio::sync::watch::Receiver<InShutdown>,
+    ext_temp: Arc<RwLock<Option<i32>>>,
+) {
     info!("Starting DB -> TA COE emitter task");
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
         config.global.ta_push_frequency * 60,

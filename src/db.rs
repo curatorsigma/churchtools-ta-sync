@@ -1,6 +1,6 @@
 //! All the db-related functions
 
-use chrono::{format::StrftimeItems, DateTime, Local, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{format::StrftimeItems, NaiveDateTime, Timelike};
 use sqlx::{Pool, Sqlite};
 use tracing::info;
 
@@ -133,7 +133,7 @@ pub async fn delete_booking(db: &Pool<Sqlite>, booking_id: i64) -> Result<(), DB
     )
     .execute(db)
     .await
-    .map(|x| ())
+    .map(|_| ())
     .map_err(|e| DBError::CannotDeleteBooking(e))
 }
 
@@ -207,7 +207,7 @@ pub async fn prune_old_bookings(db: &Pool<Sqlite>) -> Result<u64, DBError> {
 mod tests {
     use super::*;
 
-    use chrono::{NaiveDate, TimeDelta};
+    use chrono::{DateTime, NaiveDate, TimeDelta};
     use sqlx::SqlitePool;
 
     #[sqlx::test(fixtures("001_good_data"))]

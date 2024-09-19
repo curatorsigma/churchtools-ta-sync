@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::File, path::Path};
 
-use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::Deserialize;
 use sqlx::{Pool, Sqlite};
 use tracing::{event, Level};
@@ -91,7 +91,9 @@ impl Config {
             pdo_index: if (1..=64).contains(&cd.external_temperature_sensor.pdo_index) {
                 cd.external_temperature_sensor.pdo_index - 1
             } else {
-                return Err(Box::new(CreateConfigError::PDOIndexOutOfBounds(cd.external_temperature_sensor.pdo_index)));
+                return Err(Box::new(CreateConfigError::PDOIndexOutOfBounds(
+                    cd.external_temperature_sensor.pdo_index,
+                )));
             },
             timeout: cd.external_temperature_sensor.timeout,
         };
@@ -166,8 +168,7 @@ impl AssociatedRoomConfig {
     /// if external_temp is None, we do not scale the base shutdowns at all.
     fn preheat_time(&self, external_temp: Option<i32>) -> u8 {
         if let Some(x) = external_temp {
-            let clamped_external_temp: f64 =
-                std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
+            let clamped_external_temp: f64 = std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
             let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
             (self.preheat_minutes as f64 * (1_f64 - time_proportion)).round() as u8
         } else {
@@ -182,8 +183,7 @@ impl AssociatedRoomConfig {
     /// if external_temp is None, we do not scale the base shutdowns at all.
     fn preshutdown_time(&self, external_temp: Option<i32>) -> u8 {
         if let Some(x) = external_temp {
-            let clamped_external_temp: f64 =
-                std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
+            let clamped_external_temp: f64 = std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
             let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
             (self.preshutdown_minutes as f64 * time_proportion).round() as u8
         } else {
