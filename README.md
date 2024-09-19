@@ -5,19 +5,23 @@
 This information may be further used to turn on/off heating etc.
 
 # Getting started
-## Get your CT Login token
-TODO
+## Prepare the config:
+You may copy the `config.example.yaml` to `/etc/ct-ta-sync/config.yaml` and then edit this file.
+
 ## Setup the container
-TODO: docker compose up
+```bash
+docker compose up
+```
+
 ## Setup the integration in your CMI
-- output external temperature
-- go ahead and use the room data
+- Optional: Send the current external temperature to the Host running the sync. This allows us to scale preheating and preshutdown times to be more energy efficient.
+- Use the room data. It is sent as a bool (Digital On/Off), and can be used in your programming.
 
 # Further Reading
 This project connects to the CMI from [Technische Alternative RT GmbH](https://ta.co.at).
 You can find further information on [their wiki](https://wiki.ta.co.at/Hauptseite).
 
 # You do not want to sync from CT?
-You may want to take a look at `coe`(TODO: link). It defines a low-level API to work with COE packets and may be used to
+You may want to take a look at [coe](https://github.com/curatorsigma/coe-rs). It defines a low-level API to work with COE packets and may be used to
 implement any other integration for CMIs.
 

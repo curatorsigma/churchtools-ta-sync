@@ -74,7 +74,7 @@ external_temperature_sensor:
   can_id: 1
   # expect the external temperature to be sent on this output index
   pdo_index: 1
-  # When the external temperature is missing for mor then ... minutes, assume the CMI unresponsive.
+  # When the external temperature is missing for more then ... minutes, assume the CMI unresponsive.
   # No longer scale hold over time, and use the theoretical maximum hold over time instead
   timeout: 5
 
