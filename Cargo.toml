@@ -2,6 +2,11 @@
 name = "ct-ta-sync"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jonathan Schleucher"]
+categories = ["network-programming"]
+keywords = ["COE", "churchtools", "Technische Alternative"]
+license = "MIT-0"
+readme = "README.md"
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["clock", "serde"] }
