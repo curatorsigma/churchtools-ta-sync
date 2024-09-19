@@ -168,7 +168,7 @@ impl AssociatedRoomConfig {
         if let Some(x) = external_temp {
             let clamped_external_temp: f64 =
                 std::cmp::max(-100, std::cmp::min(x, 200)) as f64;
-            let time_proportion = (clamped_external_temp + 100_f64) / 30_f64;
+            let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
             (self.preheat_minutes as f64 * (1_f64 - time_proportion)).round() as u8
         } else {
             self.preheat_minutes
@@ -187,7 +187,8 @@ impl AssociatedRoomConfig {
             let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
             (self.preshutdown_minutes as f64 * time_proportion).round() as u8
         } else {
-            self.preshutdown_minutes
+            // if we do not now how warm it is, we are never allowed to prematurely stop heating
+            0
         }
     }
 
@@ -247,5 +248,114 @@ impl std::fmt::Debug for ChurchToolsConfig {
             .field("host", &self.host)
             .field("login_token", &"[redacated]")
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn preheat_time_below_start() {
+        let external_temp = -200;
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preheat_time(Some(external_temp)), 40);
+    }
+
+    #[test]
+    fn preheat_time_ext_unknown() {
+        let external_temp = None;
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preheat_time(external_temp), 40);
+    }
+
+    #[test]
+    fn preheat_time_ext_high() {
+        let external_temp = Some(200);
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preheat_time(external_temp), 0);
+    }
+
+    #[test]
+    fn preheat_time_ext_middle() {
+        let external_temp = Some(50);
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preheat_time(external_temp), 20);
+    }
+
+    #[test]
+    fn preshutdown_time_below_start() {
+        let external_temp = -200;
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preshutdown_time(Some(external_temp)), 0);
+    }
+
+    #[test]
+    fn preshutdown_time_ext_unknown() {
+        let external_temp = None;
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preshutdown_time(external_temp), 0);
+    }
+
+    #[test]
+    fn preshutdown_time_ext_high() {
+        let external_temp = Some(200);
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preshutdown_time(external_temp), 13);
+    }
+
+    #[test]
+    fn preshutdown_time_ext_middle() {
+        let external_temp = Some(50);
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 40,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preshutdown_time(external_temp), 7);
     }
 }
