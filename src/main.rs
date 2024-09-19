@@ -37,12 +37,47 @@ enum InShutdown {
 async fn signal_handler(
     mut watcher: tokio::sync::watch::Receiver<InShutdown>,
     shutdown_tx: tokio::sync::watch::Sender<InShutdown>,
-) {
+) -> Result<(), std::io::Error> {
+    let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to install SIGTERM listener: {e} Aborting.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+            return Err(e);
+        }
+    };
+    let mut sighup = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to install SIGHUP listener: {e} Aborting.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+            return Err(e);
+        }
+    };
+    let mut sigint = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to install SIGINT listener: {e} Aborting.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+            return Err(e);
+        }
+    };
     // wait for a shutdown signal
     tokio::select! {
         // shutdown the signal handler when some other process signals a shutdown
         _ = watcher.changed() => {}
-        // TODO: also shutdown on SIGINT, SIGABRT and so on
+        _ = sigterm.recv() => {
+            info!("Got SIGTERM. Shuting down.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+        }
+        _ = sighup.recv() => {
+            info!("Got SIGHUP. Shuting down.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+        }
+        _ = sigint.recv() => {
+            info!("Got SIGINT. Shuting down.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+        }
         x = tokio::signal::ctrl_c() =>  {
             match x {
                 Ok(()) => {
@@ -56,7 +91,9 @@ async fn signal_handler(
                 }
             }
         }
-    }
+    };
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -115,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     gather_res?;
     emit_res?;
     receive_res??;
-    signal_res?;
+    signal_res??;
 
     Ok(())
 }
