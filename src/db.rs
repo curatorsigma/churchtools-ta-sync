@@ -54,7 +54,8 @@ impl std::fmt::Display for DBError {
 }
 impl std::error::Error for DBError {}
 
-pub async fn get_all_bookings(db: &Pool<Sqlite>) -> Result<Vec<Booking>, DBError> {
+#[cfg(test)]
+async fn get_all_bookings(db: &Pool<Sqlite>) -> Result<Vec<Booking>, DBError> {
     Ok(sqlx::query_as!(
         NaiveBooking,
         "SELECT churchtools_id, start_time, end_time FROM bookings;"

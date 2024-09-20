@@ -66,7 +66,6 @@ impl Config {
                                 .get(&room.name)
                                 .ok_or(CreateConfigError::RoomNotFoundError(room.name.clone()))?;
                             Ok(AssociatedRoomConfig {
-                                name: room.name,
                                 pdo_index: if room.pdo_index >= 1 && room.pdo_index <= 64 {
                                     room.pdo_index - 1
                                 } else {
@@ -154,7 +153,6 @@ pub(crate) struct CMIConfig {
 
 #[derive(Debug)]
 pub(crate) struct AssociatedRoomConfig {
-    pub name: String,
     pub churchtools_id: i64,
     pub pdo_index: u8,
     pub preheat_minutes: u8,
@@ -220,7 +218,7 @@ pub(crate) struct CMIConfigData {
 /// a single room defined in the config
 #[derive(Debug, Deserialize)]
 pub(crate) struct AssociatedRoomConfigData {
-    pub name: String,
+    name: String,
     pub pdo_index: u8,
 }
 
@@ -259,7 +257,6 @@ mod test {
     fn preheat_time_below_start() {
         let external_temp = -200;
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -272,7 +269,6 @@ mod test {
     fn preheat_time_ext_unknown() {
         let external_temp = None;
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -285,7 +281,6 @@ mod test {
     fn preheat_time_ext_high() {
         let external_temp = Some(200);
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -298,7 +293,6 @@ mod test {
     fn preheat_time_ext_middle() {
         let external_temp = Some(50);
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -311,7 +305,6 @@ mod test {
     fn preshutdown_time_below_start() {
         let external_temp = -200;
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -324,7 +317,6 @@ mod test {
     fn preshutdown_time_ext_unknown() {
         let external_temp = None;
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -337,7 +329,6 @@ mod test {
     fn preshutdown_time_ext_high() {
         let external_temp = Some(200);
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
@@ -350,7 +341,6 @@ mod test {
     fn preshutdown_time_ext_middle() {
         let external_temp = Some(50);
         let room = AssociatedRoomConfig {
-            name: "".to_owned(),
             churchtools_id: 0,
             pdo_index: 0,
             preheat_minutes: 40,
