@@ -25,6 +25,14 @@ struct BookingsData {
 
 #[derive(Debug, Deserialize)]
 struct BookingsDataBase {
+    /// this is the bookings ID
+    id: i64,
+    resource: ResourceData,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResourceData {
+    /// this is the resources ID
     id: i64,
 }
 
@@ -123,7 +131,8 @@ async fn get_relevant_bookings(
         .into_iter()
         .map(|x: BookingsData| {
             Ok::<Booking, CTApiError>(Booking {
-                churchtools_id: x.base.id,
+                booking_id: x.base.id,
+                resource_id: x.base.resource.id,
                 start_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.start_date)
                     .map_err(CTApiError::ParseTime)?
                     // we get the date from CT with an unknown offset, and need to cast to UTC
@@ -157,7 +166,7 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     let new_bookings = bookings_from_ct.iter().filter(|b| {
         !bookings_from_db
             .iter()
-            .any(|x| x.churchtools_id == b.churchtools_id)
+            .any(|x| x.booking_id == b.booking_id)
     });
     trace!(
         "Adding these bookings: {:?}",
@@ -168,15 +177,15 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     // remove bookings no longer present in ct
     let deprecated_bookings = bookings_from_db
         .iter()
-        .map(|b| b.churchtools_id)
-        .filter(|&id| !bookings_from_ct.iter().any(|x| x.churchtools_id == id));
+        .map(|b| b.booking_id)
+        .filter(|&id| !bookings_from_ct.iter().any(|x| x.booking_id == id));
     crate::db::delete_bookings(&config.db, deprecated_bookings).await?;
 
     // Update bookings that have changed times in CT
     let changed_bookings = bookings_from_ct.iter().filter(|b| {
         bookings_from_db
             .iter()
-            .any(|x| x.churchtools_id == b.churchtools_id && x != *b)
+            .any(|x| x.booking_id == b.booking_id && x != *b)
     });
     crate::db::update_bookings(&config.db, changed_bookings).await?;
     Ok(())

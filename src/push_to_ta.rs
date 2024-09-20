@@ -57,15 +57,18 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
                 let num_of_bookings_in_room = bookings
                     .iter()
                     .filter(|&b| {
-                        if b.churchtools_id != room.churchtools_id {
+                        if b.resource_id != room.churchtools_id {
                             return false;
                         };
                         let (new_start, new_stop) =
                             room.apply_preheat_and_preshutdown(b.start_time, b.end_time, ext_temp);
                         let now = Utc::now();
-                        new_start < now && now < new_stop
+                        (new_start..=new_stop).contains(&now)
                     })
                     .count();
+                if num_of_bookings_in_room != 0 {
+                    debug!("Trying to send HEATING status for room {}", room.name);
+                };
                 // only heat, if Utc::now() is between
                 coe::Payload::new(
                     cmi.our_virtual_can_id,

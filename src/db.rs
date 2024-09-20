@@ -9,7 +9,8 @@ use crate::Booking;
 /// sqlite does not have tz-aware types, so we can only get NaiveDateTime from it.
 /// We ALWAYS STORE UTC DATETIMES IN SQLITE.
 struct NaiveBooking {
-    churchtools_id: i64,
+    booking_id: i64,
+    resource_id: i64,
     start_time: chrono::NaiveDateTime,
     end_time: chrono::NaiveDateTime,
 }
@@ -17,7 +18,8 @@ impl NaiveBooking {
     /// Taking a naive booking, interpret all datetimes as UTC datetimes
     fn interpret_as_utc(self) -> crate::Booking {
         Booking {
-            churchtools_id: self.churchtools_id,
+            booking_id: self.booking_id,
+            resource_id: self.resource_id,
             start_time: self.start_time.and_utc(),
             end_time: self.end_time.and_utc(),
         }
@@ -58,7 +60,7 @@ impl std::error::Error for DBError {}
 async fn get_all_bookings(db: &Pool<Sqlite>) -> Result<Vec<Booking>, DBError> {
     Ok(sqlx::query_as!(
         NaiveBooking,
-        "SELECT churchtools_id, start_time, end_time FROM bookings;"
+        "SELECT booking_id, resource_id, start_time, end_time FROM bookings;"
     )
     .fetch_all(db)
     .await
@@ -79,7 +81,7 @@ pub async fn get_bookings_in_timeframe(
     let end_str = end.format_with_items(fmt.clone()).to_string();
     Ok(sqlx::query_as!(
         NaiveBooking,
-        "SELECT churchtools_id, start_time, end_time FROM bookings \
+        "SELECT booking_id, resource_id, start_time, end_time FROM bookings \
          WHERE start_time <= ? AND ? <= end_time;",
         end_str,
         start_str,
@@ -101,10 +103,11 @@ pub async fn insert_booking(db: &Pool<Sqlite>, booking: &Booking) -> Result<(), 
         .to_string();
     let end_str = booking.end_time.format_with_items(fmt.clone()).to_string();
     sqlx::query!(
-        "INSERT INTO bookings (churchtools_id, start_time, end_time) VALUES \
-        (?, ?, ?);
+        "INSERT INTO bookings (booking_id, resource_id, start_time, end_time) VALUES \
+        (?, ?, ?, ?);
         ",
-        booking.churchtools_id,
+        booking.booking_id,
+        booking.resource_id,
         start_str,
         end_str,
     )
@@ -128,7 +131,7 @@ pub async fn insert_bookings<'a, I: Iterator<Item = &'a Booking>>(
 pub async fn delete_booking(db: &Pool<Sqlite>, booking_id: i64) -> Result<(), DBError> {
     sqlx::query!(
         "DELETE FROM bookings \
-        WHERE churchtools_id = ?;
+        WHERE booking_id = ?;
         ",
         booking_id,
     )
@@ -156,12 +159,13 @@ pub async fn update_booking(db: &Pool<Sqlite>, booking: &Booking) -> Result<(), 
         .to_string();
     let end_time = booking.end_time.format_with_items(fmt).to_string();
     sqlx::query!(
-        "UPDATE bookings SET start_time = ?, end_time = ? \
-        WHERE churchtools_id = ?;
+        "UPDATE bookings SET resource_id = ?, start_time = ?, end_time = ? \
+        WHERE booking_id = ?;
         ",
+        booking.resource_id,
         start_time,
         end_time,
-        booking.churchtools_id,
+        booking.booking_id,
     )
     .execute(db)
     .await
@@ -175,7 +179,7 @@ pub async fn update_bookings<'a, I: Iterator<Item = &'a Booking>>(
 ) -> Result<(), DBError> {
     for b in bookings {
         update_booking(db, b).await?;
-        info!("Updated Booking {}. Is now: {:?}", b.churchtools_id, b)
+        info!("Updated Booking {}. Is now: {:?}", b.booking_id, b)
     }
     Ok(())
 }
@@ -218,7 +222,8 @@ mod tests {
         assert_eq!(
             bookings[0],
             Booking {
-                churchtools_id: 123,
+                booking_id: 123,
+                resource_id: 10,
                 start_time: DateTime::parse_from_rfc3339("2021-03-26T15:30:00+00:00")
                     .unwrap()
                     .into(),
@@ -230,7 +235,8 @@ mod tests {
         assert_eq!(
             bookings[1],
             Booking {
-                churchtools_id: 125,
+                booking_id: 125,
+                resource_id: 11,
                 start_time: DateTime::parse_from_rfc3339("2021-03-28T15:30:00+00:00")
                     .unwrap()
                     .into(),
@@ -256,7 +262,8 @@ mod tests {
         assert_eq!(
             bookings[0],
             Booking {
-                churchtools_id: 123,
+                booking_id: 123,
+                resource_id: 10,
                 start_time: DateTime::parse_from_rfc3339("2021-03-26T15:30:00+00:00")
                     .unwrap()
                     .into(),
@@ -295,7 +302,8 @@ mod tests {
     #[sqlx::test(fixtures("001_good_data"))]
     async fn test_update_booking(pool: SqlitePool) {
         let new_booking = Booking {
-            churchtools_id: 123,
+            booking_id: 123,
+            resource_id: 10,
             start_time: DateTime::parse_from_rfc3339("2021-04-26T15:30:00+00:00")
                 .unwrap()
                 .into(),
@@ -320,7 +328,8 @@ mod tests {
     #[sqlx::test(fixtures("001_good_data"))]
     async fn test_insert_booking(pool: SqlitePool) {
         let new_booking = Booking {
-            churchtools_id: 12341234,
+            booking_id: 12341234,
+            resource_id: 21,
             start_time: DateTime::parse_from_rfc3339("2019-04-26T14:28:00+00:00")
                 .unwrap()
                 .into(),
@@ -348,14 +357,16 @@ mod tests {
         let now = chrono::Utc::now().with_nanosecond(0).unwrap();
         let in_an_hour = now + TimeDelta::hours(1);
         let booking_today = Booking {
-            churchtools_id: 9999,
+            resource_id: 31,
+            booking_id: 9999,
             start_time: now,
             end_time: in_an_hour,
         };
         let yesterday = now - TimeDelta::days(1);
         let yesterday_plus_one_hour = yesterday + TimeDelta::hours(1);
         let booking_yesterday = Booking {
-            churchtools_id: 8888,
+            resource_id: 31,
+            booking_id: 8888,
             start_time: yesterday,
             end_time: yesterday_plus_one_hour,
         };

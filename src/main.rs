@@ -19,9 +19,12 @@ const BOOKING_DATABASE_NAME: &str = ".bookings.db";
 /// A single booking for a room
 #[derive(Debug, PartialEq)]
 struct Booking {
-    /// the ID of this booking in CT
-    /// This is used for matching ressources against rooms defined in the config.
-    churchtools_id: i64,
+    /// the ID of the resource for this booking.
+    /// NOTE: this is NOT the ID of the booking, but of the resource in CT.
+    /// This ID is used for matching ressources against rooms defined in the config.
+    resource_id: i64,
+    /// The ID of this booking. This is used to update bookings when they are updated in CT.
+    booking_id: i64,
     /// The booking starts at...
     /// ALL DATETIMES ARE UTC.
     start_time: chrono::DateTime<Utc>,
