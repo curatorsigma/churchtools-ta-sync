@@ -67,7 +67,7 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
                     })
                     .count();
                 if num_of_bookings_in_room != 0 {
-                    debug!("Trying to send HEATING status for room {}", room.name);
+                    info!("Now sending HEATING status for room {}.", room.name);
                 };
                 // only heat, if Utc::now() is between
                 coe::Payload::new(

@@ -95,8 +95,11 @@ pub async fn read_ext_temp(
         tokio::select! {
             // we got a temperature value in time
             temp = read_next_ext_temp_packet(&sock, config.external_temperature_sensor.can_id, config.external_temperature_sensor.pdo_index) => {
-                let mut lock = ext_temp.write().await;
-                *lock = Some(temp);
+                {
+                    let mut lock = ext_temp.write().await;
+                    *lock = Some(temp);
+                }
+                interval.reset();
             }
             // timeout: no correct temp value received
             _ = interval.tick() => {
