@@ -8,6 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # We want to test with prepared statements, without having the db file there
+  SQLX_OFFLINE: true
 
 jobs:
   build:
