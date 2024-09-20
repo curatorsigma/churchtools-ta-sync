@@ -257,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "ct-ta-sync"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "coe",
