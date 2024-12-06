@@ -17,6 +17,13 @@ docker compose up
 - Optional: Send the current external temperature to the Host running the sync. This allows us to scale preheating and preshutdown times to be more energy efficient.
 - Use the room data. It is sent as a bool (Digital On/Off), and can be used in your programming.
 
+# (Developing) Prepare SQLX for local testing
+```
+touch .bookings.db
+echo 'DATABASE_URL="sqlite://.bookings.db"' > .env
+cargo sqlx migrate run
+```
+
 # Further Reading
 This project connects to the CMI from [Technische Alternative RT GmbH](https://ta.co.at).
 You can find further information on [their wiki](https://wiki.ta.co.at/Hauptseite).
