@@ -308,6 +308,19 @@ mod test {
     }
 
     #[test]
+    fn preheat_time_one_third() {
+        let external_temp = Some(0);
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 60,
+            preshutdown_minutes: 13,
+        };
+        assert_eq!(room.preheat_time(external_temp), 40);
+    }
+
+    #[test]
     fn preshutdown_time_below_start() {
         let external_temp = -200;
         let room = AssociatedRoomConfig {
@@ -357,5 +370,22 @@ mod test {
             preshutdown_minutes: 13,
         };
         assert_eq!(room.preshutdown_time(external_temp), 7);
+    }
+
+    #[test]
+    fn apply_one_third_preheat() {
+        let external_temp = Some(0);
+        let room = AssociatedRoomConfig {
+            name: "".to_owned(),
+            churchtools_id: 0,
+            pdo_index: 0,
+            preheat_minutes: 60,
+            preshutdown_minutes: 10,
+        };
+        let start_time = chrono::DateTime::parse_from_rfc3339("2024-12-06T14:00:00Z").unwrap();
+        let end_time = chrono::DateTime::parse_from_rfc3339("2024-12-06T17:00:00Z").unwrap();
+        let (new_start, new_end) = room.apply_preheat_and_preshutdown(start_time.into(), end_time.into(), external_temp);
+        assert_eq!(new_start, chrono::DateTime::parse_from_rfc3339("2024-12-06T13:20:00Z").unwrap());
+        assert_eq!(new_end, chrono::DateTime::parse_from_rfc3339("2024-12-06T16:57:00Z").unwrap());
     }
 }
