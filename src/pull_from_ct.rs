@@ -47,7 +47,8 @@ struct BookingsDataCalculated {
 #[derive(Debug)]
 pub enum CTApiError {
     GetBookings(reqwest::Error),
-    Deserialize(reqwest::Error),
+    Deserialize,
+    Utf8Decode,
     ParseTime(chrono::ParseError),
 }
 impl std::fmt::Display for CTApiError {
@@ -56,8 +57,11 @@ impl std::fmt::Display for CTApiError {
             Self::GetBookings(e) => {
                 write!(f, "Cannot get bookings. reqwest Error: {e}")
             }
-            Self::Deserialize(e) => {
-                write!(f, "Cannot deserialize the response. reqwest Error: {e}")
+            Self::Deserialize => {
+                write!(f, "Cannot deserialize the response.")
+            }
+            Self::Utf8Decode=> {
+                write!(f, "Cannot decode the message bytes as utf-8.")
             }
             Self::ParseTime(e) => {
                 write!(
@@ -115,17 +119,37 @@ async fn get_relevant_bookings(
     query_strings.push(("to", end_date.to_string()));
     query_strings.push(("status_ids[]", "2".to_owned()));
     // TODO: add login token to request
-    let response = reqwest::Client::new()
+    let response = match reqwest::Client::new()
         .get(format!("https://{}/api/bookings", config.ct.host))
         .query(&query_strings)
         .header("accept", "application/json")
         .header("Authorization", format!("Login {}", config.ct.login_token))
         .send()
-        .await
-        .map_err(CTApiError::GetBookings)?
-        .json::<CTBookingsResponse>()
-        .await
-        .map_err(CTApiError::Deserialize)?;
+        .await {
+            Ok(x) => {
+                let text_res = x.text().await;
+                match text_res {
+                    Ok(text) => {
+                        let deser_res: Result<CTBookingsResponse, _> = serde_json::from_str(&text);
+                        if let Ok(y) = deser_res {
+                            y
+                        } else {
+                            warn!("There was an error parsing the return value from CT.");
+                            warn!("The complete text received was: {text}");
+                            return Err(CTApiError::Deserialize);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("There was an error reading the response from CT as utf-8: {e}");
+                        return Err(CTApiError::Utf8Decode);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("There was a problem getting a response from CT");
+                return Err(CTApiError::GetBookings(e));
+            }
+        };
     response
         .data
         .into_iter()

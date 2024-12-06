@@ -257,13 +257,14 @@ dependencies = [
 
 [[package]]
 name = "ct-ta-sync"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "chrono",
  "coe",
  "itertools",
  "reqwest",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sqlx",
  "tokio",
