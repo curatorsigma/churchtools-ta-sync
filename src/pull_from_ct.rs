@@ -100,6 +100,7 @@ impl From<CTApiError> for GatherError {
     }
 }
 
+/// Actually get Booking Data from Churchtools
 async fn get_relevant_bookings(
     config: &Config,
     start_date: chrono::NaiveDate,
@@ -115,10 +116,14 @@ async fn get_relevant_bookings(
         // convert them to the query parameters we need
         .map(|id| ("resource_ids[]", format!("{id}")))
         .collect::<Vec<_>>();
+    // use bookingsin the relevant timeframe
     query_strings.push(("from", start_date.to_string()));
     query_strings.push(("to", end_date.to_string()));
+    // use bookings that are
+    // --- pending
+    query_strings.push(("status_ids[]", "1".to_owned()));
+    // --- approved
     query_strings.push(("status_ids[]", "2".to_owned()));
-    // TODO: add login token to request
     let response = match reqwest::Client::new()
         .get(format!("https://{}/api/bookings", config.ct.host))
         .query(&query_strings)
@@ -170,6 +175,7 @@ async fn get_relevant_bookings(
         .collect::<Result<Vec<_>, _>>()
 }
 
+/// Read Bookings from CT and import them into the DB
 async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     let start = Utc::now().naive_utc().into();
     let end = start + chrono::TimeDelta::days(1);
@@ -215,6 +221,7 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     Ok(())
 }
 
+/// Continuously pull Data from CT into the DB
 pub async fn keep_db_up_to_date(
     config: Arc<Config>,
     mut watcher: tokio::sync::watch::Receiver<InShutdown>,
