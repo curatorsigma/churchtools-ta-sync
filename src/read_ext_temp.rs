@@ -187,8 +187,9 @@ pub async fn read_ext_temp(
                         }
                     };
                     // no new information for this room - update its timeout status
+                    let already_in_timeout = temperature_status.in_timeout();
                     temperature_status.tick_down(time_elapsed);
-                    if temperature_status.in_timeout() {
+                    if temperature_status.in_timeout() && !already_in_timeout {
                         warn!("Got no temperature for {room_name} ");
                     };
                 };
