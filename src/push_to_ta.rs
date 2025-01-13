@@ -56,7 +56,9 @@ fn get_packets_to_emit(config: &Config, bookings: Vec<Booking>, ext_temp: tokio:
                         if let Some(current_temp) = ext_temp.get(&room.name) {
                             let required_heating_time = room.required_preheat_time(current_temp, config.current_temperature.global_assume_current_temperature_offset);
                             let now = Utc::now();
-                            return now + required_heating_time + Duration::minutes(5) >= b.start_time;
+                            let need_to_start_heating = now + required_heating_time + Duration::minutes(5) >= b.start_time;
+                            let already_ended = now >= b.end_time;
+                            return need_to_start_heating && !already_ended;
                         } else {
                             return false;
                         };
