@@ -104,6 +104,7 @@ pub(crate) struct RoomTemperatureStatus {
     time_till_timeout: u64,
 }
 impl RoomTemperatureStatus {
+    /// Create a new status with starting temperature set to 0.
     pub fn new(starting_time: u64) -> Self {
         Self {
             last_temperature: 0.0,
@@ -111,12 +112,14 @@ impl RoomTemperatureStatus {
         }
     }
 
-    pub fn _test_new(last_temperature: f32, time_till_timeout: u64) -> Self {
+    /// internal, used for easier construction of test cases.
+    pub(crate) fn _test_new(last_temperature: f32, time_till_timeout: u64) -> Self {
         Self {
             last_temperature, time_till_timeout,
         }
     }
 
+    /// Get the current timeout unless we are in timeout.
     pub fn current_temperature(&self) -> Option<f32> {
         if self.in_timeout() {
             None
@@ -125,6 +128,7 @@ impl RoomTemperatureStatus {
         }
     }
 
+    /// Update the temperature with the given one, resetting the timeout.
     fn update_with(&mut self, name: &str, temperature: f32, config: &Config) -> Result<(), ReadExtTempError> {
         self.last_temperature = temperature;
         match config.get_timeout_by_room_name(name) {
@@ -134,10 +138,12 @@ impl RoomTemperatureStatus {
         Ok(())
     }
 
+    /// Tick down the timer by the given elapsed number of seconds.
     fn tick_down(&mut self, elapsed: u64) {
         self.time_till_timeout = self.time_till_timeout.saturating_sub(elapsed);
     }
 
+    /// Are we currently in timeout?
     pub fn in_timeout(&self) -> bool {
         self.time_till_timeout == 0
     }
