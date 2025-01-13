@@ -111,6 +111,12 @@ impl RoomTemperatureStatus {
         }
     }
 
+    pub fn _test_new(last_temperature: f32, time_till_timeout: u64) -> Self {
+        Self {
+            last_temperature, time_till_timeout,
+        }
+    }
+
     pub fn current_temperature(&self) -> Option<f32> {
         if self.in_timeout() {
             None

@@ -1,11 +1,11 @@
 use std::{collections::HashMap, fs::File, path::Path};
 
-use chrono::Duration;
+use chrono::{Duration, Utc};
 use serde::Deserialize;
 use sqlx::{Pool, Sqlite};
 use tracing::{event, Level};
 
-use crate::read_ext_temp::RoomTemperatureStatus;
+use crate::{read_ext_temp::RoomTemperatureStatus, Booking};
 
 #[derive(Debug)]
 pub enum CreateConfigError {
@@ -261,6 +261,14 @@ impl AssociatedRoomConfig {
         let required_time_in_s = (self.room_config.target_temperature - effective_temperature).max(0.0) / self.room_config.delta_T_per_hour * 3600.0;
         Duration::seconds(required_time_in_s as i64)
     }
+
+    pub fn heat_now(&self, current_temp: &RoomTemperatureStatus, global_assume_current_temperature_offset: f32, b: &Booking) -> bool {
+        let required_heating_time = self.required_preheat_time(current_temp, global_assume_current_temperature_offset);
+        let now = Utc::now();
+        let need_to_start_heating = now + required_heating_time + Duration::minutes(5) >= b.start_time;
+        let already_ended = now >= b.end_time;
+        need_to_start_heating && !already_ended
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -303,4 +311,132 @@ impl std::fmt::Debug for ChurchToolsConfig {
 
 #[cfg(test)]
 mod test {
+    use chrono::Duration;
+
+    use crate::{read_ext_temp::RoomTemperatureStatus, Booking};
+
+    use super::AssociatedRoomConfig;
+
+    #[test]
+    fn heat_now_booking_in_past() {
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::_test_new(18.0, 0);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() - Duration::minutes(60),
+            end_time: chrono::offset::Utc::now() - Duration::minutes(30),
+        };
+        let heat_now = room.heat_now(&current_temp, 4.0, &booking);
+        assert_eq!(heat_now, false);
+    }
+
+    #[test]
+    fn heat_now_need_heating() {
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::_test_new(18.0, 2);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() - Duration::minutes(30),
+            end_time: chrono::offset::Utc::now() + Duration::minutes(30),
+        };
+        let heat_now = room.heat_now(&current_temp, 4.0, &booking);
+        assert_eq!(heat_now, true);
+    }
+
+    #[test]
+    fn heat_now_need_pre_heating() {
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::_test_new(18.0, 2);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() + Duration::minutes(30),
+            end_time: chrono::offset::Utc::now() + Duration::minutes(90),
+        };
+        let heat_now = room.heat_now(&current_temp, 4.0, &booking);
+        assert_eq!(heat_now, true);
+    }
+
+    #[test]
+    fn heat_now_to_far_in_the_future() {
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::_test_new(18.0, 2);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() + Duration::hours(24),
+            end_time: chrono::offset::Utc::now() + Duration::hours(30),
+        };
+        let heat_now = room.heat_now(&current_temp, 4.0, &booking);
+        assert_eq!(heat_now, false);
+    }
+
+    #[test]
+    fn heat_now_global_assume_used() {
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: None } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::new(0);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() + Duration::hours(2),
+            end_time: chrono::offset::Utc::now() + Duration::hours(5),
+        };
+        let heat_now = room.heat_now(&current_temp, 4.0, &booking);
+        assert_eq!(heat_now, true);
+
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: None } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::new(0);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() + Duration::hours(4),
+            end_time: chrono::offset::Utc::now() + Duration::hours(5),
+        };
+        let heat_now = room.heat_now(&current_temp, 4.0, &booking);
+        assert_eq!(heat_now, false);
+    }
+
+    #[test]
+    fn heat_now_timeout_used() {
+        let room = AssociatedRoomConfig {
+            name: "room_name".to_owned(),
+            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            pdo_index: 1,
+        };
+        let current_temp = RoomTemperatureStatus::_test_new(19.0, 0);
+        let booking = Booking {
+            resource_id: 1,
+            booking_id: 1,
+            start_time: chrono::offset::Utc::now() + Duration::hours(2),
+            end_time: chrono::offset::Utc::now() + Duration::hours(5),
+        };
+        let heat_now = room.heat_now(&current_temp, 0.0, &booking);
+        assert_eq!(heat_now, true);
+    }
 }
