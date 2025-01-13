@@ -30,7 +30,7 @@ rooms:
     # What temperature do we want to reach when the room is fully heated?
     # Will be used to calculate the required preheating time
     # in °C, float
-    target_temperature: 20.00
+    target_temperature: 20.0
     current_temperature:
       # we expect the current temperature to be sent from this CAN-ID
       receiving_can_id: 1
