@@ -27,7 +27,7 @@ fn handle_coe_packet(config: &Config, packet: Packet) -> Vec<(String, f32)> {
                 }
             }
             None => {
-                trace!("Received payload {payload:?}. Does not fit a known room.");
+                trace!("Received {payload:?}. Does not fit a known room.");
             }
         }
     };
@@ -104,10 +104,10 @@ pub(crate) struct RoomTemperatureStatus {
     time_till_timeout: u64,
 }
 impl RoomTemperatureStatus {
-    pub fn default() -> Self {
+    pub fn new(starting_time: u64) -> Self {
         Self {
             last_temperature: 0.0,
-            time_till_timeout: 0,
+            time_till_timeout: starting_time,
         }
     }
 
@@ -175,7 +175,7 @@ pub async fn read_ext_temp(
         tokio::select! {
             // we got a temperature value in time
             read_next_result = read_next_temp_packet(&sock, &config) => {
-                let time_elapsed =read_next_result.0;
+                let time_elapsed = read_next_result.0;
                 let temperatures = read_next_result.1;
                 let mut lock = ext_temp.write().await;
                 // update each room with the new temperature or tick town the timeout timer
@@ -188,12 +188,15 @@ pub async fn read_ext_temp(
                     };
                     // no new information for this room - update its timeout status
                     temperature_status.tick_down(time_elapsed);
+                    if temperature_status.in_timeout() {
+                        warn!("Got no temperature for {room_name} ");
+                    };
                 };
                 interval.reset();
             }
             // timeout: no correct temp value received
             _ = interval.tick() => {
-                warn!("Got no external temperature within timeout. Now setting it to unknown.");
+                trace!("No room temperature received within 60 seconds. Ticking down.");
                 let mut lock = ext_temp.write().await;
                 // tick down each rooms timeout timer
                 for (_, temperature_status) in lock.iter_mut() {
