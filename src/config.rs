@@ -1,9 +1,11 @@
 use std::{collections::HashMap, fs::File, path::Path};
 
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::Duration;
 use serde::Deserialize;
 use sqlx::{Pool, Sqlite};
 use tracing::{event, Level};
+
+use crate::read_ext_temp::RoomTemperatureStatus;
 
 #[derive(Debug)]
 pub enum CreateConfigError {
@@ -30,7 +32,7 @@ impl std::error::Error for CreateConfigError {}
 #[derive(Debug, Deserialize)]
 pub(crate) struct ConfigData {
     pub cmis: Vec<CMIConfigData>,
-    pub external_temperature_sensor: ExtTempConfig,
+    pub current_temperature: GlobalCurrentTemperatureConfig,
     pub ct: ChurchToolsConfig,
     pub global: GlobalConfig,
     pub rooms: HashMap<String, RoomConfig>,
@@ -38,7 +40,7 @@ pub(crate) struct ConfigData {
 #[derive(Debug)]
 pub(crate) struct Config {
     pub cmis: Vec<CMIConfig>,
-    pub external_temperature_sensor: ExtTempConfig,
+    pub current_temperature: GlobalCurrentTemperatureConfig,
     pub ct: ChurchToolsConfig,
     pub db: Pool<Sqlite>,
     pub global: GlobalConfig,
@@ -74,9 +76,7 @@ impl Config {
                                         room.pdo_index,
                                     ));
                                 },
-                                churchtools_id: room_data.churchtools_id,
-                                preheat_minutes: room_data.preheat_minutes.unwrap_or(30),
-                                preshutdown_minutes: room_data.preshutdown_minutes.unwrap_or(10),
+                                room_config: room_data.clone(),
                             })
                         })
                         .collect::<Result<Vec<_>, _>>()?,
@@ -84,23 +84,9 @@ impl Config {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // shift the pdo_offset for the external_temperature_sensor data by one:
-        let ext_temp_config = ExtTempConfig {
-            bind_addr: cd.external_temperature_sensor.bind_addr,
-            can_id: cd.external_temperature_sensor.can_id,
-            pdo_index: if (1..=64).contains(&cd.external_temperature_sensor.pdo_index) {
-                cd.external_temperature_sensor.pdo_index - 1
-            } else {
-                return Err(Box::new(CreateConfigError::PDOIndexOutOfBounds(
-                    cd.external_temperature_sensor.pdo_index,
-                )));
-            },
-            timeout: cd.external_temperature_sensor.timeout,
-        };
-
         Ok(Config {
             cmis,
-            external_temperature_sensor: ext_temp_config,
+            current_temperature: cd.current_temperature,
             ct: cd.ct,
             db,
             global: cd.global,
@@ -128,13 +114,66 @@ impl Config {
         };
         Config::from_config_data(config_data).await
     }
+
+    /// If there is a room config whose can_id and pdo matches the inputs, return that rooms name.
+    pub fn can_pdo_is_known(&self, can_id: u8, pdo: u8) -> Option<String> {
+        for cmi in &self.cmis {
+            for room in &cmi.rooms {
+                if room.is_this_can_pdo(can_id, pdo) {
+                    return Some(room.name.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Get the timeout for a room if that room exists.
+    pub fn get_timeout_by_room_name(&self, name: &str) -> Option<u8> {
+        for cmi in &self.cmis {
+            for room in &cmi.rooms {
+                if room.name == name {
+                    return Some(room.room_config.current_temperature.timeout);
+                }
+            }
+        };
+        None
+    }
+
+    /// Create the empty temperature structure for all known rooms.
+    pub fn get_empty_temperature_status(&self) -> HashMap<String, RoomTemperatureStatus> {
+        let mut res = HashMap::<String, RoomTemperatureStatus>::new();
+        for cmi in &self.cmis {
+            for room in &cmi.rooms {
+                res.insert(room.name.clone(), RoomTemperatureStatus::default());
+            }
+        }
+        res
+    }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct CurrentTemperatureConfig {
+    pub receiving_can_id: u8,
+    pub receiving_pdo: u8,
+    #[serde(default = "default_timeout")]
+    pub timeout: u8,
+    pub timeout_assume_temperature: Option<f32>,
+}
+fn default_timeout() -> u8 {
+    10
+}
+
+// temperature == T. t does not make sense.
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize, Clone)]
 pub(crate) struct RoomConfig {
-    pub preheat_minutes: Option<u8>,
-    pub preshutdown_minutes: Option<u8>,
+    /// CT ID of the ressource corresponding to this room
     pub churchtools_id: i64,
+    /// How many K can this room be heated per h?
+    pub delta_T_per_hour: f32,
+    /// Which temperature in °C / 10 do we want this room to have?
+    pub target_temperature: f32,
+    pub current_temperature: CurrentTemperatureConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,61 +191,26 @@ pub(crate) struct CMIConfig {
     pub rooms: Vec<AssociatedRoomConfig>,
 }
 
+/// A room associated to a receiving CMI
 #[derive(Debug)]
 pub(crate) struct AssociatedRoomConfig {
     pub name: String,
-    pub churchtools_id: i64,
+    pub room_config: RoomConfig,
     pub pdo_index: u8,
-    pub preheat_minutes: u8,
-    pub preshutdown_minutes: u8,
 }
 impl AssociatedRoomConfig {
-    /// Calculate the amount of minutes a room should be preheated, depending on the the
-    /// base_preheating time set in the config and the external temperature
-    ///
-    /// external temperature is expected in tenths of a Degree Centigrade
-    /// if external_temp is None, we do not scale the base shutdowns at all.
-    fn preheat_time(&self, external_temp: Option<i32>) -> u8 {
-        if let Some(x) = external_temp {
-            let clamped_external_temp: f64 = x.clamp(-100, 200) as f64;
-            let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
-            (self.preheat_minutes as f64 * (1_f64 - time_proportion)).round() as u8
-        } else {
-            self.preheat_minutes
-        }
+    /// Return true iff this room expects its temperature to come from the given CAN-ID and PDO
+    fn is_this_can_pdo(&self, can_id: u8, pdo: u8) -> bool {
+        self.room_config.current_temperature.receiving_can_id == can_id && self.room_config.current_temperature.receiving_pdo == pdo
     }
 
-    /// Calculate the amount of minutes a rooms heating may be shut down BEFORE the end of a booking
-    /// base_preshutdown time set in the config and the external temperature
-    ///
-    /// external temperature is expected in tenths of a Degree Centigrade
-    /// if external_temp is None, we do not scale the base shutdowns at all.
-    fn preshutdown_time(&self, external_temp: Option<i32>) -> u8 {
-        if let Some(x) = external_temp {
-            let clamped_external_temp: f64 = x.clamp(-100, 200) as f64;
-            let time_proportion = (clamped_external_temp + 100_f64) / 300_f64;
-            (self.preshutdown_minutes as f64 * time_proportion).round() as u8
-        } else {
-            // if we do not now how warm it is, we are never allowed to prematurely stop heating
-            0
-        }
-    }
-
-    /// Apply both prehead and preshutdown times, depending on this rooms configuration.
-    /// Return the real start and real end time (i.e. the times where we have to start heating or
-    /// are allowed to stop heating).
-    ///
-    /// external temperature is expected in tenths of a Degree Centigrade
-    /// if external_temp is None, we do not scale the base shutdowns at all.
-    pub fn apply_preheat_and_preshutdown(
-        &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-        external_temp: Option<i32>,
-    ) -> (DateTime<Utc>, DateTime<Utc>) {
-        let new_start = start - TimeDelta::minutes(self.preheat_time(external_temp).into());
-        let new_end = end - TimeDelta::minutes(self.preshutdown_time(external_temp).into());
-        (new_start, new_end)
+    /// calculate the required time to preheat this room
+    pub fn required_preheat_time(&self, current_temp: &RoomTemperatureStatus, global_assume_current_temperature_offset: f32) -> Duration {
+        let effective_temperature = current_temp.current_temperature().unwrap_or(
+            self.room_config.current_temperature.timeout_assume_temperature.unwrap_or(self.room_config.target_temperature - global_assume_current_temperature_offset)
+        );
+        let required_time_in_s = (self.room_config.target_temperature - effective_temperature).max(0.0) / self.room_config.delta_T_per_hour * 3600.0;
+        Duration::seconds(required_time_in_s as i64)
     }
 }
 
@@ -224,17 +228,14 @@ pub(crate) struct AssociatedRoomConfigData {
     pub pdo_index: u8,
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct ExtTempConfig {
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct GlobalCurrentTemperatureConfig {
     /// IP Address to bind a receiving UDP socket on. Port is 5442
     pub bind_addr: String,
-    /// Can ID to expect - other ids are ignored
-    pub can_id: u8,
-    /// PDO Index to expect - other ids are ignored
-    pub pdo_index: u8,
-    /// number of minutes to wait for a packet to the correct Can-ID, PDO.
-    /// After this time, the external temperature is not considered anymore
-    pub timeout: u8,
+    /// When timeout occurs for a room and no assume temperature is given for it,
+    /// assume that the current temperature is [`Self::global_assume_current_temperature_offset`] below the
+    /// rooms [`RoomConfig::target_temperature`].
+    pub global_assume_current_temperature_offset: f32,
 }
 
 #[derive(Deserialize)]
@@ -253,139 +254,4 @@ impl std::fmt::Debug for ChurchToolsConfig {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
-    #[test]
-    fn preheat_time_below_start() {
-        let external_temp = -200;
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preheat_time(Some(external_temp)), 40);
-    }
-
-    #[test]
-    fn preheat_time_ext_unknown() {
-        let external_temp = None;
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preheat_time(external_temp), 40);
-    }
-
-    #[test]
-    fn preheat_time_ext_high() {
-        let external_temp = Some(200);
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preheat_time(external_temp), 0);
-    }
-
-    #[test]
-    fn preheat_time_ext_middle() {
-        let external_temp = Some(50);
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preheat_time(external_temp), 20);
-    }
-
-    #[test]
-    fn preheat_time_one_third() {
-        let external_temp = Some(0);
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 60,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preheat_time(external_temp), 40);
-    }
-
-    #[test]
-    fn preshutdown_time_below_start() {
-        let external_temp = -200;
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preshutdown_time(Some(external_temp)), 0);
-    }
-
-    #[test]
-    fn preshutdown_time_ext_unknown() {
-        let external_temp = None;
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preshutdown_time(external_temp), 0);
-    }
-
-    #[test]
-    fn preshutdown_time_ext_high() {
-        let external_temp = Some(200);
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preshutdown_time(external_temp), 13);
-    }
-
-    #[test]
-    fn preshutdown_time_ext_middle() {
-        let external_temp = Some(50);
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 40,
-            preshutdown_minutes: 13,
-        };
-        assert_eq!(room.preshutdown_time(external_temp), 7);
-    }
-
-    #[test]
-    fn apply_one_third_preheat() {
-        let external_temp = Some(0);
-        let room = AssociatedRoomConfig {
-            name: "".to_owned(),
-            churchtools_id: 0,
-            pdo_index: 0,
-            preheat_minutes: 60,
-            preshutdown_minutes: 10,
-        };
-        let start_time = chrono::DateTime::parse_from_rfc3339("2024-12-06T14:00:00Z").unwrap();
-        let end_time = chrono::DateTime::parse_from_rfc3339("2024-12-06T17:00:00Z").unwrap();
-        let (new_start, new_end) = room.apply_preheat_and_preshutdown(start_time.into(), end_time.into(), external_temp);
-        assert_eq!(new_start, chrono::DateTime::parse_from_rfc3339("2024-12-06T13:20:00Z").unwrap());
-        assert_eq!(new_end, chrono::DateTime::parse_from_rfc3339("2024-12-06T16:57:00Z").unwrap());
-    }
 }

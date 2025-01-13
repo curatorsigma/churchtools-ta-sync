@@ -1,15 +1,14 @@
 //! Push the state from DB to CMIs
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use chrono::{TimeDelta, Utc};
+use chrono::{Duration, TimeDelta, Utc};
+use coe::Payload;
 use tokio::{net::UdpSocket, sync::RwLock};
 use tracing::{debug, info, trace, warn};
 
 use crate::{
-    config::Config,
-    db::{get_bookings_in_timeframe, DBError},
-    InShutdown,
+    config::Config, db::{get_bookings_in_timeframe, DBError}, read_ext_temp::RoomTemperatureStatus, Booking, InShutdown
 };
 
 /// All the things that can go wrong while emiting COE Packets
@@ -38,14 +37,8 @@ impl std::fmt::Display for COEEmitError {
     }
 }
 
-/// Send CoE packets to all cmis, updating them on the state of all their assigned rooms
-async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitError> {
-    // get all bookings from the db that intersect now and now + 30 mins
-    let start = Utc::now().naive_utc();
-    let end = start + TimeDelta::minutes(30);
-    let bookings = get_bookings_in_timeframe(&config.db, start, end).await?;
-
-    let sock = UdpSocket::bind((config.global.emiter_bind_addr.clone(), 0)).await?;
+fn get_packets_to_emit(config: &Config, bookings: Vec<Booking>, ext_temp: tokio::sync::RwLockReadGuard<HashMap<String, RoomTemperatureStatus>>) -> Vec<(String, Vec<Payload>)> {
+    let mut all_payloads = Vec::<(String, Vec<Payload>)>::new();
     // for each CMI: send either on or off for the rooms we care about
     for cmi in &config.cmis {
         // calculate their preheating-times and cooldown-times
@@ -57,13 +50,16 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
                 let num_of_bookings_in_room = bookings
                     .iter()
                     .filter(|&b| {
-                        if b.resource_id != room.churchtools_id {
+                        if b.resource_id != room.room_config.churchtools_id {
                             return false;
                         };
-                        let (new_start, new_stop) =
-                            room.apply_preheat_and_preshutdown(b.start_time, b.end_time, ext_temp);
-                        let now = Utc::now();
-                        (new_start..=new_stop).contains(&now)
+                        if let Some(current_temp) = ext_temp.get(&room.name) {
+                            let required_heating_time = room.required_preheat_time(current_temp, config.current_temperature.global_assume_current_temperature_offset);
+                            let now = Utc::now();
+                            return now + required_heating_time + Duration::minutes(5) >= b.start_time;
+                        } else {
+                            return false;
+                        };
                     })
                     .count();
                 if num_of_bookings_in_room != 0 {
@@ -80,14 +76,34 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
                 )
             })
             .collect::<Vec<_>>();
+        all_payloads.push((cmi.host.clone(), payloads));
+    };
+    all_payloads
+}
+
+/// Send CoE packets to all cmis, updating them on the state of all their assigned rooms
+async fn emit_coe(config: &Config, ext_temp: Arc<RwLock<HashMap<String, RoomTemperatureStatus>>>) -> Result<(), COEEmitError> {
+    // get all bookings from the db that intersect now and now + 1d
+    let start = Utc::now().naive_utc();
+    let end = start + TimeDelta::days(1);
+    let bookings = get_bookings_in_timeframe(&config.db, start, end).await?;
+
+    let sock = UdpSocket::bind((config.global.emiter_bind_addr.clone(), 0)).await?;
+
+    let payloads_by_target = {
+        let temperatures_unlocked = ext_temp.read().await;
+        get_packets_to_emit(config, bookings, temperatures_unlocked)
+    };
+
+    // send all packets.
+    for (target_host, payloads) in payloads_by_target {
         let packets = coe::packets_from_payloads(&payloads);
-        // send all packets.
         for packet in packets {
-            sock.send_to(&Into::<Vec<u8>>::into(packet), (cmi.host.as_str(), 5442))
+            sock.send_to(&Into::<Vec<u8>>::into(packet), (target_host.as_str(), 5442))
                 .await?;
-            trace!("Sent a CoE packet to {}", cmi.host);
+            trace!("Sent a CoE packet to {}", target_host);
         }
-    }
+    };
     Ok(())
 }
 
@@ -95,7 +111,7 @@ async fn emit_coe(config: &Config, ext_temp: Option<i32>) -> Result<(), COEEmitE
 pub async fn push_coe(
     config: Arc<Config>,
     mut watcher: tokio::sync::watch::Receiver<InShutdown>,
-    ext_temp: Arc<RwLock<Option<i32>>>,
+    ext_temp: Arc<RwLock<HashMap<String, RoomTemperatureStatus>>>,
 ) {
     info!("Starting DB -> TA COE emitter task");
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
@@ -104,9 +120,8 @@ pub async fn push_coe(
     interval.tick().await;
     loop {
         debug!("Emitter starting new run.");
-        let current_temp = *ext_temp.read().await;
         // send data from state once
-        let res = emit_coe(&config, current_temp).await;
+        let res = emit_coe(&config, ext_temp.clone()).await;
         match res {
             Ok(()) => {
                 debug!("Successfully emitted all required CoE packets");

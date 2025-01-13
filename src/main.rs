@@ -118,8 +118,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // migrate the database
     sqlx::migrate!().run(&config.db).await?;
 
-    // the external temperature
-    let external_temperature = Arc::new(RwLock::new(None));
+    // the room temperatures
+    let temperatures = config.get_empty_temperature_status();
+    let external_temperature = Arc::new(RwLock::new(temperatures));
 
     // cancellation channel
     let (tx, rx) = tokio::sync::watch::channel(InShutdown::No);

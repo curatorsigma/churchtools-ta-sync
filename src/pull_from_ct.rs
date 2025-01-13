@@ -110,7 +110,7 @@ async fn get_relevant_bookings(
         .cmis
         .iter()
         .flat_map(|cmi| &cmi.rooms)
-        .map(|room_config| room_config.churchtools_id)
+        .map(|room_config| room_config.room_config.churchtools_id)
         .unique()
         // we now have the resource ids we care about
         // convert them to the query parameters we need

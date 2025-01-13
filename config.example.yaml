@@ -22,23 +22,44 @@ rooms:
     # id of the ressource in CT.
     # this is used to actually map ressources to rooms
     churchtools_id: 41
-    # OPTION
-    # number of minutes the room takes to be heated from
-    # unheated to heated state
-    # default: 30
-    # max: 255
-    preheat_mins: 30
-    # OPTION
-    # max number of minutes the room may be unheated before
-    # the end of a booking
-    # default: 10
-    # max: 255
-    preshutdown_mins: 10
+    # The expected delta-T in K / h when this room is heating.
+    # We use this value to calculate when to turn on heating.
+    # in K/h, float
+    delta_T_per_hour: 1.5
+    # The target temperature for this room.
+    # What temperature do we want to reach when the room is fully heated?
+    # Will be used to calculate the required preheating time
+    # in °C, float
+    target_temperature: 20.00
+    current_temperature:
+      # we expect the current temperature to be sent from this CAN-ID
+      receiving_can_id: 1
+      # ... and from this PDO (as given in the GUI)
+      receiving_pdo: 1
+      # OPTION. DEFAULT 10.
+      # When the current temperature for a room is missing for at least ... minutes, stop waiting.
+      # Instead, assume the current temperature to be `timeout_assume_temperature`.
+      #
+      # In min
+      timeout: 5
+      # OPTION
+      # When we do not receive a current temperature, use this assumed temperature to calculate preheating times.
+      # When this is not given, the global_assume_current_temperature_offset is used (see below)
+      timeout_assume_temperature: 16
   room6:
     churchtools_id: 42
-    preheat_mins: 20
+    delta_T_per_hour: 1.5
+    target_temperature: 20
+    current_temperature:
+      receiving_can_id: 2
+      receiving_pdo: 1
   room2:
     churchtools_id: 56
+    delta_T_per_hour: 1.5
+    target_temperature: 20
+    current_temperature:
+      receiving_can_id: 3
+      receiving_pdo: 1
 
 
 # define any number of cmis to which to send data
@@ -67,16 +88,16 @@ cmis:
 
 # we scale hold over time based on external temperature
 # For this, we need a sensor. We expect to get the external temperature via COE
-external_temperature_sensor:
+current_temperature:
   # OUR bind address. Sending CMI will need to send the external temperature to this address with COEv2
+  # Port 5442/UDP NEEDs to be free on this address - CMIs cannot send COEv2 on different ports.
   bind_addr: 192.168.24.173
-  # expect the CMI to send the temperature as CAN-ID ...
-  can_id: 1
-  # expect the external temperature to be sent on this output index
-  pdo_index: 1
-  # When the external temperature is missing for more then ... minutes, assume the CMI unresponsive.
-  # No longer scale hold over time, and use the theoretical maximum hold over time instead
-  timeout: 5
+  # When
+  # - A rooms current temperature is in timeout
+  # - The room definition in this file has no timeout_assume_temperature
+  # Instead assume the current temperature to be `room.target_temperature - global_assume_current_temperature_offset`.
+  # In K
+  global_assume_current_temperature_offset: 4
 
 ct:
   # the hostname of your CT instance
