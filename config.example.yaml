@@ -37,8 +37,9 @@ rooms:
       # ... and from this PDO (as given in the GUI)
       receiving_pdo: 1
       # OPTION. DEFAULT 10.
-      # When the current temperature for a room is missing for at least ... minutes, stop waiting.
+      # When the current temperature for a room has been missing for at least ... minutes, stop waiting.
       # Instead, assume the current temperature to be `timeout_assume_temperature`.
+      # NOTE: timeout values are up to 1m wrong, since the status is updated once a minute in some cases (when we do not receive any packets).
       #
       # In min
       timeout: 5
