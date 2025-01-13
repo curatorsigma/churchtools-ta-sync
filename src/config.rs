@@ -144,7 +144,7 @@ impl Config {
         let mut res = HashMap::<String, RoomTemperatureStatus>::new();
         for cmi in &self.cmis {
             for room in &cmi.rooms {
-                res.insert(room.name.clone(), RoomTemperatureStatus::new(room.room_config.current_temperature.timeout as u64 * 60));
+                res.insert(room.name.clone(), RoomTemperatureStatus::new(0));
             }
         }
         res
