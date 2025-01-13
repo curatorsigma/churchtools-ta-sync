@@ -35,7 +35,7 @@ pub(crate) struct ConfigData {
     pub current_temperature: GlobalCurrentTemperatureConfig,
     pub ct: ChurchToolsConfig,
     pub global: GlobalConfig,
-    pub rooms: HashMap<String, RoomConfig>,
+    pub rooms: HashMap<String, RoomConfigData>,
 }
 #[derive(Debug)]
 pub(crate) struct Config {
@@ -76,7 +76,7 @@ impl Config {
                                         room.pdo_index,
                                     ));
                                 },
-                                room_config: room_data.clone(),
+                                room_config: room_data.clone().try_into()?,
                             })
                         })
                         .collect::<Result<Vec<_>, _>>()?,
@@ -144,15 +144,40 @@ impl Config {
         let mut res = HashMap::<String, RoomTemperatureStatus>::new();
         for cmi in &self.cmis {
             for room in &cmi.rooms {
-                res.insert(room.name.clone(), RoomTemperatureStatus::default());
+                res.insert(room.name.clone(), RoomTemperatureStatus::new(room.room_config.current_temperature.timeout as u64 * 60));
             }
         }
         res
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct CurrentTemperatureConfig {
+    pub receiving_can_id: u8,
+    pub receiving_pdo: u8,
+    pub timeout: u8,
+    pub timeout_assume_temperature: Option<f32>,
+}
+impl TryFrom<CurrentTemperatureConfigData> for CurrentTemperatureConfig {
+    type Error = CreateConfigError;
+    fn try_from(value: CurrentTemperatureConfigData) -> Result<Self, Self::Error> {
+        Ok(Self {
+            receiving_can_id: value.receiving_can_id,
+            receiving_pdo: if value.receiving_pdo >= 1 && value.receiving_pdo <= 64 {
+                value.receiving_pdo - 1
+            } else {
+                return Err(CreateConfigError::PDOIndexOutOfBounds(
+                    value.receiving_pdo,
+                ));
+            },
+            timeout: value.timeout,
+            timeout_assume_temperature: value.timeout_assume_temperature,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct CurrentTemperatureConfigData {
     pub receiving_can_id: u8,
     pub receiving_pdo: u8,
     #[serde(default = "default_timeout")]
@@ -165,7 +190,7 @@ fn default_timeout() -> u8 {
 
 // temperature == T. t does not make sense.
 #[allow(non_snake_case)]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct RoomConfig {
     /// CT ID of the ressource corresponding to this room
     pub churchtools_id: i64,
@@ -174,6 +199,30 @@ pub(crate) struct RoomConfig {
     /// Which temperature in °C / 10 do we want this room to have?
     pub target_temperature: f32,
     pub current_temperature: CurrentTemperatureConfig,
+}
+impl TryFrom<RoomConfigData> for RoomConfig {
+    type Error = CreateConfigError;
+    fn try_from(value: RoomConfigData) -> Result<Self, Self::Error> {
+        Ok(Self {
+            churchtools_id: value.churchtools_id,
+            delta_T_per_hour: value.delta_T_per_hour,
+            target_temperature: value.target_temperature,
+            current_temperature: value.current_temperature.try_into()?,
+        })
+    }
+}
+
+// temperature == T. t does not make sense.
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct RoomConfigData {
+    /// CT ID of the ressource corresponding to this room
+    pub churchtools_id: i64,
+    /// How many K can this room be heated per h?
+    pub delta_T_per_hour: f32,
+    /// Which temperature in °C / 10 do we want this room to have?
+    pub target_temperature: f32,
+    pub current_temperature: CurrentTemperatureConfigData,
 }
 
 #[derive(Debug, Deserialize)]
