@@ -2,7 +2,7 @@
 
 use std::{str::FromStr, sync::Arc};
 
-use chrono::{Datelike, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use itertools::Itertools;
 use serde::Deserialize;
 use tracing::{debug, info, trace, warn};
@@ -118,10 +118,10 @@ fn convert_date_or_datetime(input: &str, start_or_end: CalculateFor) -> Option<c
                 Ok(y) => {
                     match start_or_end {
                         CalculateFor::Start => {
-                            Some( chrono::Utc.with_ymd_and_hms(y.year(), y.month0(), y.day0(), 0, 0, 0).earliest().expect("No DST at 00:00:00") )
+                            Some( chrono::Utc.from_local_datetime(&y.and_hms_opt(0, 0, 0).expect("Statically good time.")).earliest().expect("No DST at 00:00:00") )
                         }
                         CalculateFor::End => {
-                            Some( chrono::Utc.with_ymd_and_hms(y.year(), y.month0(), y.day0(), 23, 59, 59).earliest().expect("No DST at 23:59:59") )
+                            Some( chrono::Utc.from_local_datetime(&y.and_hms_opt(23, 59, 59).expect("Statically good time.")).earliest().expect("No DST at 23:59:59") )
                         }
                     }
                 }
@@ -293,5 +293,35 @@ pub async fn keep_db_up_to_date(
             }
             _ = interval.tick() => {}
         }
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use chrono::TimeZone;
+
+    use super::convert_date_or_datetime;
+
+    #[test]
+    fn date_parsing() {
+        let input = "2025-01-25";
+        let parsed = convert_date_or_datetime(input, super::CalculateFor::Start).unwrap();
+        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 0, 0, 0).unwrap());
+
+        let input = "2025-01-25";
+        let parsed = convert_date_or_datetime(input, super::CalculateFor::End).unwrap();
+        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 23, 59, 59).unwrap());
+    }
+
+    #[test]
+    fn datetime_parsing() {
+        let input = "2025-01-25T12:30:11Z";
+        let parsed = convert_date_or_datetime(input, super::CalculateFor::Start).unwrap();
+        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 12, 30, 11).unwrap());
+
+        let input = "2025-01-25T10:00:00+01:00";
+        let parsed = convert_date_or_datetime(input, super::CalculateFor::End).unwrap();
+        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 9, 0, 0).unwrap());
     }
 }
