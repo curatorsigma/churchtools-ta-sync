@@ -1,8 +1,8 @@
 //! Get data from Churchtools
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
-use chrono::Utc;
+use chrono::{Datelike, TimeZone, Utc};
 use itertools::Itertools;
 use serde::Deserialize;
 use tracing::{debug, info, trace, warn};
@@ -49,7 +49,7 @@ pub enum CTApiError {
     GetBookings(reqwest::Error),
     Deserialize,
     Utf8Decode,
-    ParseTime(chrono::ParseError, String),
+    ParseTime(String),
 }
 impl std::fmt::Display for CTApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -63,10 +63,10 @@ impl std::fmt::Display for CTApiError {
             Self::Utf8Decode=> {
                 write!(f, "Cannot decode the message bytes as utf-8.")
             }
-            Self::ParseTime(e, x) => {
+            Self::ParseTime(x) => {
                 write!(
                     f,
-                    "Cannot parse a time contained in CTs response. chrono Error: {e}. Input: {x}."
+                    "Cannot parse a date or time contained in CTs response. Input: {x}."
                 )
             }
         }
@@ -97,6 +97,39 @@ impl From<DBError> for GatherError {
 impl From<CTApiError> for GatherError {
     fn from(value: CTApiError) -> Self {
         Self::CT(value)
+    }
+}
+
+
+enum CalculateFor {
+    Start,
+    End,
+}
+
+/// CT sometimes sends RFC3339, and sometimes YYYY-MM-DD only
+///
+/// `start_or_end`: Do we set the time to 00:00:00 (Start)or 23:59:59 (End) when only a Date is
+/// given?
+fn convert_date_or_datetime(input: &str, start_or_end: CalculateFor) -> Option<chrono::DateTime<Utc>> {
+    match chrono::DateTime::parse_from_rfc3339(input) {
+        Ok(x) => { Some(x.into()) }
+        Err(_) => {
+            match chrono::NaiveDate::from_str(input) {
+                Ok(y) => {
+                    match start_or_end {
+                        CalculateFor::Start => {
+                            Some( chrono::Utc.with_ymd_and_hms(y.year(), y.month0(), y.day0(), 0, 0, 0).earliest().expect("No DST at 00:00:00") )
+                        }
+                        CalculateFor::End => {
+                            Some( chrono::Utc.with_ymd_and_hms(y.year(), y.month0(), y.day0(), 23, 59, 59).earliest().expect("No DST at 23:59:59") )
+                        }
+                    }
+                }
+                Err(_) => {
+                    None
+                }
+            }
+        }
     }
 }
 
@@ -162,13 +195,13 @@ async fn get_relevant_bookings(
             Ok::<Booking, CTApiError>(Booking {
                 booking_id: x.base.id,
                 resource_id: x.base.resource.id,
-                start_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.start_date)
-                    .map_err(|e| CTApiError::ParseTime(e, x.calculated.start_date))?
+                start_time: convert_date_or_datetime(&x.calculated.start_date, CalculateFor::Start)
+                    .ok_or(CTApiError::ParseTime(x.calculated.start_date))?
                     // we get the date from CT with an unknown offset, and need to cast to UTC
                     // (actually, CT seems to always return UTC, but this is not part of a stably documented API)
                     .into(),
-                end_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.end_date)
-                    .map_err(|e| CTApiError::ParseTime(e, x.calculated.end_date))?
+                end_time: convert_date_or_datetime(&x.calculated.end_date, CalculateFor::End)
+                    .ok_or(CTApiError::ParseTime(x.calculated.end_date))?
                     .into(),
             })
         })
