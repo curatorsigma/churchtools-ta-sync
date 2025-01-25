@@ -49,7 +49,7 @@ pub enum CTApiError {
     GetBookings(reqwest::Error),
     Deserialize,
     Utf8Decode,
-    ParseTime(chrono::ParseError),
+    ParseTime(chrono::ParseError, String),
 }
 impl std::fmt::Display for CTApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -63,10 +63,10 @@ impl std::fmt::Display for CTApiError {
             Self::Utf8Decode=> {
                 write!(f, "Cannot decode the message bytes as utf-8.")
             }
-            Self::ParseTime(e) => {
+            Self::ParseTime(e, x) => {
                 write!(
                     f,
-                    "Cannot parse a time contained in CTs response. chrono Error: {e}"
+                    "Cannot parse a time contained in CTs response. chrono Error: {e}. Input: {x}."
                 )
             }
         }
@@ -163,12 +163,12 @@ async fn get_relevant_bookings(
                 booking_id: x.base.id,
                 resource_id: x.base.resource.id,
                 start_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.start_date)
-                    .map_err(CTApiError::ParseTime)?
+                    .map_err(|e| CTApiError::ParseTime(e, x.calculated.start_date))?
                     // we get the date from CT with an unknown offset, and need to cast to UTC
                     // (actually, CT seems to always return UTC, but this is not part of a stably documented API)
                     .into(),
                 end_time: chrono::DateTime::parse_from_rfc3339(&x.calculated.end_date)
-                    .map_err(CTApiError::ParseTime)?
+                    .map_err(|e| CTApiError::ParseTime(e, x.calculated.end_date))?
                     .into(),
             })
         })
