@@ -52,37 +52,36 @@ impl Config {
             .create_if_missing(true);
         let db = sqlx::SqlitePool::connect_with(connect_options).await?;
 
-        let cmis = cd
-            .cmis
-            .into_iter()
-            .map(|cmi| {
-                Ok::<CMIConfig, CreateConfigError>(CMIConfig {
-                    host: cmi.host,
-                    our_virtual_can_id: cmi.our_virtual_can_id,
-                    rooms: cmi
-                        .rooms
-                        .into_iter()
-                        .map(|room| {
-                            let room_data = cd
-                                .rooms
-                                .get(&room.name)
-                                .ok_or(CreateConfigError::RoomNotFoundError(room.name.clone()))?;
-                            Ok(AssociatedRoomConfig {
-                                name: room.name,
-                                pdo_index: if room.pdo_index >= 1 && room.pdo_index <= 64 {
-                                    room.pdo_index - 1
-                                } else {
-                                    return Err(CreateConfigError::PDOIndexOutOfBounds(
-                                        room.pdo_index,
-                                    ));
-                                },
-                                room_config: room_data.clone().try_into()?,
+        let cmis =
+            cd.cmis
+                .into_iter()
+                .map(|cmi| {
+                    Ok::<CMIConfig, CreateConfigError>(CMIConfig {
+                        host: cmi.host,
+                        our_virtual_can_id: cmi.our_virtual_can_id,
+                        rooms: cmi
+                            .rooms
+                            .into_iter()
+                            .map(|room| {
+                                let room_data = cd.rooms.get(&room.name).ok_or(
+                                    CreateConfigError::RoomNotFoundError(room.name.clone()),
+                                )?;
+                                Ok(AssociatedRoomConfig {
+                                    name: room.name,
+                                    pdo_index: if room.pdo_index >= 1 && room.pdo_index <= 64 {
+                                        room.pdo_index - 1
+                                    } else {
+                                        return Err(CreateConfigError::PDOIndexOutOfBounds(
+                                            room.pdo_index,
+                                        ));
+                                    },
+                                    room_config: room_data.clone().try_into()?,
+                                })
                             })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
+                            .collect::<Result<Vec<_>, _>>()?,
+                    })
                 })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Config {
             cmis,
@@ -135,7 +134,7 @@ impl Config {
                     return Some(room.room_config.current_temperature.timeout);
                 }
             }
-        };
+        }
         None
     }
 
@@ -144,7 +143,12 @@ impl Config {
         let mut res = HashMap::<String, RoomTemperatureStatus>::new();
         for cmi in &self.cmis {
             for room in &cmi.rooms {
-                res.insert(room.name.clone(), RoomTemperatureStatus::new(room.room_config.current_temperature.timeout as u64 * 60));
+                res.insert(
+                    room.name.clone(),
+                    RoomTemperatureStatus::new(
+                        room.room_config.current_temperature.timeout as u64 * 60,
+                    ),
+                );
             }
         }
         res
@@ -166,9 +170,7 @@ impl TryFrom<CurrentTemperatureConfigData> for CurrentTemperatureConfig {
             receiving_pdo: if value.receiving_pdo >= 1 && value.receiving_pdo <= 64 {
                 value.receiving_pdo - 1
             } else {
-                return Err(CreateConfigError::PDOIndexOutOfBounds(
-                    value.receiving_pdo,
-                ));
+                return Err(CreateConfigError::PDOIndexOutOfBounds(value.receiving_pdo));
             },
             timeout: value.timeout,
             timeout_assume_temperature: value.timeout_assume_temperature,
@@ -250,22 +252,42 @@ pub(crate) struct AssociatedRoomConfig {
 impl AssociatedRoomConfig {
     /// Return true iff this room expects its temperature to come from the given CAN-ID and PDO
     fn is_this_can_pdo(&self, can_id: u8, pdo: u8) -> bool {
-        self.room_config.current_temperature.receiving_can_id == can_id && self.room_config.current_temperature.receiving_pdo == pdo
+        self.room_config.current_temperature.receiving_can_id == can_id
+            && self.room_config.current_temperature.receiving_pdo == pdo
     }
 
     /// calculate the required time to preheat this room
-    pub fn required_preheat_time(&self, current_temp: &RoomTemperatureStatus, global_assume_current_temperature_offset: f32) -> Duration {
+    pub fn required_preheat_time(
+        &self,
+        current_temp: &RoomTemperatureStatus,
+        global_assume_current_temperature_offset: f32,
+    ) -> Duration {
         let effective_temperature = current_temp.current_temperature().unwrap_or(
-            self.room_config.current_temperature.timeout_assume_temperature.unwrap_or(self.room_config.target_temperature - global_assume_current_temperature_offset)
+            self.room_config
+                .current_temperature
+                .timeout_assume_temperature
+                .unwrap_or(
+                    self.room_config.target_temperature - global_assume_current_temperature_offset,
+                ),
         );
-        let required_time_in_s = (self.room_config.target_temperature - effective_temperature).max(0.0) / self.room_config.delta_T_per_hour * 3600.0;
+        let required_time_in_s = (self.room_config.target_temperature - effective_temperature)
+            .max(0.0)
+            / self.room_config.delta_T_per_hour
+            * 3600.0;
         Duration::seconds(required_time_in_s as i64)
     }
 
-    pub fn heat_now(&self, current_temp: &RoomTemperatureStatus, global_assume_current_temperature_offset: f32, b: &Booking) -> bool {
-        let required_heating_time = self.required_preheat_time(current_temp, global_assume_current_temperature_offset);
+    pub fn heat_now(
+        &self,
+        current_temp: &RoomTemperatureStatus,
+        global_assume_current_temperature_offset: f32,
+        b: &Booking,
+    ) -> bool {
+        let required_heating_time =
+            self.required_preheat_time(current_temp, global_assume_current_temperature_offset);
         let now = Utc::now();
-        let need_to_start_heating = now + required_heating_time + Duration::minutes(5) >= b.start_time;
+        let need_to_start_heating =
+            now + required_heating_time + Duration::minutes(5) >= b.start_time;
         let already_ended = now >= b.end_time;
         need_to_start_heating && !already_ended
     }
@@ -321,7 +343,17 @@ mod test {
     fn heat_now_booking_in_past() {
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: Some(16.0),
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::_test_new(18.0, 0);
@@ -339,7 +371,17 @@ mod test {
     fn heat_now_need_heating() {
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: Some(16.0),
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::_test_new(18.0, 2);
@@ -357,7 +399,17 @@ mod test {
     fn heat_now_need_pre_heating() {
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: Some(16.0),
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::_test_new(18.0, 2);
@@ -375,7 +427,17 @@ mod test {
     fn heat_now_to_far_in_the_future() {
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: Some(16.0),
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::_test_new(18.0, 2);
@@ -393,7 +455,17 @@ mod test {
     fn heat_now_global_assume_used() {
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: None } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: None,
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::new(0);
@@ -408,7 +480,17 @@ mod test {
 
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: None } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: None,
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::new(0);
@@ -426,7 +508,17 @@ mod test {
     fn heat_now_timeout_used() {
         let room = AssociatedRoomConfig {
             name: "room_name".to_owned(),
-            room_config: super::RoomConfig { churchtools_id: 1, delta_T_per_hour: 1.5, target_temperature: 20.0, current_temperature: super::CurrentTemperatureConfig { receiving_can_id: 1, receiving_pdo: 1, timeout: 5, timeout_assume_temperature: Some(16.0) } },
+            room_config: super::RoomConfig {
+                churchtools_id: 1,
+                delta_T_per_hour: 1.5,
+                target_temperature: 20.0,
+                current_temperature: super::CurrentTemperatureConfig {
+                    receiving_can_id: 1,
+                    receiving_pdo: 1,
+                    timeout: 5,
+                    timeout_assume_temperature: Some(16.0),
+                },
+            },
             pdo_index: 1,
         };
         let current_temp = RoomTemperatureStatus::_test_new(19.0, 0);

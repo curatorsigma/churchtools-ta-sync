@@ -8,7 +8,10 @@ use tokio::{net::UdpSocket, sync::RwLock};
 use tracing::{debug, info, trace, warn};
 
 use crate::{
-    config::Config, db::{get_bookings_in_timeframe, DBError}, read_ext_temp::RoomTemperatureStatus, Booking, InShutdown
+    config::Config,
+    db::{get_bookings_in_timeframe, DBError},
+    read_ext_temp::RoomTemperatureStatus,
+    Booking, InShutdown,
 };
 
 /// All the things that can go wrong while emiting COE Packets
@@ -37,7 +40,11 @@ impl std::fmt::Display for COEEmitError {
     }
 }
 
-fn get_packets_to_emit(config: &Config, bookings: Vec<Booking>, ext_temp: tokio::sync::RwLockReadGuard<HashMap<String, RoomTemperatureStatus>>) -> Vec<(String, Vec<Payload>)> {
+fn get_packets_to_emit(
+    config: &Config,
+    bookings: Vec<Booking>,
+    ext_temp: tokio::sync::RwLockReadGuard<HashMap<String, RoomTemperatureStatus>>,
+) -> Vec<(String, Vec<Payload>)> {
     let mut all_payloads = Vec::<(String, Vec<Payload>)>::new();
     // for each CMI: send either on or off for the rooms we care about
     for cmi in &config.cmis {
@@ -54,7 +61,13 @@ fn get_packets_to_emit(config: &Config, bookings: Vec<Booking>, ext_temp: tokio:
                             return false;
                         };
                         if let Some(current_temp) = ext_temp.get(&room.name) {
-                            return room.heat_now(current_temp, config.current_temperature.global_assume_current_temperature_offset, b);
+                            return room.heat_now(
+                                current_temp,
+                                config
+                                    .current_temperature
+                                    .global_assume_current_temperature_offset,
+                                b,
+                            );
                         } else {
                             return false;
                         };
@@ -75,12 +88,15 @@ fn get_packets_to_emit(config: &Config, bookings: Vec<Booking>, ext_temp: tokio:
             })
             .collect::<Vec<_>>();
         all_payloads.push((cmi.host.clone(), payloads));
-    };
+    }
     all_payloads
 }
 
 /// Send CoE packets to all cmis, updating them on the state of all their assigned rooms
-async fn emit_coe(config: &Config, ext_temp: Arc<RwLock<HashMap<String, RoomTemperatureStatus>>>) -> Result<(), COEEmitError> {
+async fn emit_coe(
+    config: &Config,
+    ext_temp: Arc<RwLock<HashMap<String, RoomTemperatureStatus>>>,
+) -> Result<(), COEEmitError> {
     // get all bookings from the db that intersect now and now + 1d
     let start = Utc::now().naive_utc();
     let end = start + TimeDelta::days(1);
@@ -101,7 +117,7 @@ async fn emit_coe(config: &Config, ext_temp: Arc<RwLock<HashMap<String, RoomTemp
                 .await?;
             trace!("Sent a CoE packet to {}", target_host);
         }
-    };
+    }
     Ok(())
 }
 

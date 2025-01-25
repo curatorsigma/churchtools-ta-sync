@@ -41,7 +41,8 @@ async fn signal_handler(
     mut watcher: tokio::sync::watch::Receiver<InShutdown>,
     shutdown_tx: tokio::sync::watch::Sender<InShutdown>,
 ) -> Result<(), std::io::Error> {
-    let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+    let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+    {
         Ok(x) => x,
         Err(e) => {
             error!("Failed to install SIGTERM listener: {e} Aborting.");
@@ -57,7 +58,8 @@ async fn signal_handler(
             return Err(e);
         }
     };
-    let mut sigint = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()) {
+    let mut sigint = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+    {
         Ok(x) => x,
         Err(e) => {
             error!("Failed to install SIGINT listener: {e} Aborting.");

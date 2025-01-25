@@ -7,11 +7,7 @@ use itertools::Itertools;
 use serde::Deserialize;
 use tracing::{debug, info, trace, warn};
 
-use crate::{
-    config::Config,
-    db::DBError,
-    Booking, InShutdown,
-};
+use crate::{config::Config, db::DBError, Booking, InShutdown};
 
 #[derive(Debug, Deserialize)]
 struct CTBookingsResponse {
@@ -60,7 +56,7 @@ impl std::fmt::Display for CTApiError {
             Self::Deserialize => {
                 write!(f, "Cannot deserialize the response.")
             }
-            Self::Utf8Decode=> {
+            Self::Utf8Decode => {
                 write!(f, "Cannot decode the message bytes as utf-8.")
             }
             Self::ParseTime(x) => {
@@ -100,7 +96,6 @@ impl From<CTApiError> for GatherError {
     }
 }
 
-
 enum CalculateFor {
     Start,
     End,
@@ -110,26 +105,33 @@ enum CalculateFor {
 ///
 /// `start_or_end`: Do we set the time to 00:00:00 (Start)or 23:59:59 (End) when only a Date is
 /// given?
-fn convert_date_or_datetime(input: &str, start_or_end: CalculateFor) -> Option<chrono::DateTime<Utc>> {
+fn convert_date_or_datetime(
+    input: &str,
+    start_or_end: CalculateFor,
+) -> Option<chrono::DateTime<Utc>> {
     match chrono::DateTime::parse_from_rfc3339(input) {
-        Ok(x) => { Some(x.into()) }
-        Err(_) => {
-            match chrono::NaiveDate::from_str(input) {
-                Ok(y) => {
-                    match start_or_end {
-                        CalculateFor::Start => {
-                            Some( chrono::Utc.from_local_datetime(&y.and_hms_opt(0, 0, 0).expect("Statically good time.")).earliest().expect("No DST at 00:00:00") )
-                        }
-                        CalculateFor::End => {
-                            Some( chrono::Utc.from_local_datetime(&y.and_hms_opt(23, 59, 59).expect("Statically good time.")).earliest().expect("No DST at 23:59:59") )
-                        }
-                    }
-                }
-                Err(_) => {
-                    None
-                }
-            }
-        }
+        Ok(x) => Some(x.into()),
+        Err(_) => match chrono::NaiveDate::from_str(input) {
+            Ok(y) => match start_or_end {
+                CalculateFor::Start => Some(
+                    chrono::Utc
+                        .from_local_datetime(
+                            &y.and_hms_opt(0, 0, 0).expect("Statically good time."),
+                        )
+                        .earliest()
+                        .expect("No DST at 00:00:00"),
+                ),
+                CalculateFor::End => Some(
+                    chrono::Utc
+                        .from_local_datetime(
+                            &y.and_hms_opt(23, 59, 59).expect("Statically good time."),
+                        )
+                        .earliest()
+                        .expect("No DST at 23:59:59"),
+                ),
+            },
+            Err(_) => None,
+        },
     }
 }
 
@@ -163,31 +165,32 @@ async fn get_relevant_bookings(
         .header("accept", "application/json")
         .header("Authorization", format!("Login {}", config.ct.login_token))
         .send()
-        .await {
-            Ok(x) => {
-                let text_res = x.text().await;
-                match text_res {
-                    Ok(text) => {
-                        let deser_res: Result<CTBookingsResponse, _> = serde_json::from_str(&text);
-                        if let Ok(y) = deser_res {
-                            y
-                        } else {
-                            warn!("There was an error parsing the return value from CT.");
-                            warn!("The complete text received was: {text}");
-                            return Err(CTApiError::Deserialize);
-                        }
-                    }
-                    Err(e) => {
-                        warn!("There was an error reading the response from CT as utf-8: {e}");
-                        return Err(CTApiError::Utf8Decode);
+        .await
+    {
+        Ok(x) => {
+            let text_res = x.text().await;
+            match text_res {
+                Ok(text) => {
+                    let deser_res: Result<CTBookingsResponse, _> = serde_json::from_str(&text);
+                    if let Ok(y) = deser_res {
+                        y
+                    } else {
+                        warn!("There was an error parsing the return value from CT.");
+                        warn!("The complete text received was: {text}");
+                        return Err(CTApiError::Deserialize);
                     }
                 }
+                Err(e) => {
+                    warn!("There was an error reading the response from CT as utf-8: {e}");
+                    return Err(CTApiError::Utf8Decode);
+                }
             }
-            Err(e) => {
-                warn!("There was a problem getting a response from CT");
-                return Err(CTApiError::GetBookings(e));
-            }
-        };
+        }
+        Err(e) => {
+            warn!("There was a problem getting a response from CT");
+            return Err(CTApiError::GetBookings(e));
+        }
+    };
     response
         .data
         .into_iter()
@@ -296,7 +299,6 @@ pub async fn keep_db_up_to_date(
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use chrono::TimeZone;
@@ -307,21 +309,37 @@ mod test {
     fn date_parsing() {
         let input = "2025-01-25";
         let parsed = convert_date_or_datetime(input, super::CalculateFor::Start).unwrap();
-        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 0, 0, 0).unwrap());
+        assert_eq!(
+            parsed,
+            chrono::Utc.with_ymd_and_hms(2025, 1, 25, 0, 0, 0).unwrap()
+        );
 
         let input = "2025-01-25";
         let parsed = convert_date_or_datetime(input, super::CalculateFor::End).unwrap();
-        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 23, 59, 59).unwrap());
+        assert_eq!(
+            parsed,
+            chrono::Utc
+                .with_ymd_and_hms(2025, 1, 25, 23, 59, 59)
+                .unwrap()
+        );
     }
 
     #[test]
     fn datetime_parsing() {
         let input = "2025-01-25T12:30:11Z";
         let parsed = convert_date_or_datetime(input, super::CalculateFor::Start).unwrap();
-        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 12, 30, 11).unwrap());
+        assert_eq!(
+            parsed,
+            chrono::Utc
+                .with_ymd_and_hms(2025, 1, 25, 12, 30, 11)
+                .unwrap()
+        );
 
         let input = "2025-01-25T10:00:00+01:00";
         let parsed = convert_date_or_datetime(input, super::CalculateFor::End).unwrap();
-        assert_eq!(parsed, chrono::Utc.with_ymd_and_hms(2025, 1, 25, 9, 0, 0).unwrap());
+        assert_eq!(
+            parsed,
+            chrono::Utc.with_ymd_and_hms(2025, 1, 25, 9, 0, 0).unwrap()
+        );
     }
 }

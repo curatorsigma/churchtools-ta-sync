@@ -16,11 +16,14 @@ fn handle_coe_packet(config: &Config, packet: Packet) -> Vec<(String, f32)> {
         // go through all rooms and see if this payload fits
         match config.can_pdo_is_known(payload.node(), payload.pdo_index()) {
             Some(room_name) => {
-                if let COEValue::Analogue(
-                    AnalogueCOEValue::DegreeCentigrade_Tens(x),
-                ) = payload.value()
+                if let COEValue::Analogue(AnalogueCOEValue::DegreeCentigrade_Tens(x)) =
+                    payload.value()
                 {
-                    debug!("Got the temperature {} °C for {}", x as f32 / 10_f32, room_name);
+                    debug!(
+                        "Got the temperature {} °C for {}",
+                        x as f32 / 10_f32,
+                        room_name
+                    );
                     known_payloads.push((room_name, x as f32 / 10_f32));
                 } else {
                     warn!("Got Payload for correct ID and Index, but the Unit was not Degree Centigrade ({}).", payload.unit_id());
@@ -30,7 +33,7 @@ fn handle_coe_packet(config: &Config, packet: Packet) -> Vec<(String, f32)> {
                 trace!("Received {payload:?}. Does not fit a known room.");
             }
         }
-    };
+    }
     if known_payloads.is_empty() {
         debug!("Got a well-formed COE packet, but none of its payloads fit a known room.");
     }
@@ -83,7 +86,10 @@ impl std::fmt::Display for ReadExtTempError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Udp(x) => write!(f, "Udp Error: {x}"),
-            Self::RoomKnownButConfigNotPresent(x) => write!(f, "Room {x} was known but its config is not present. Programmer Error."),
+            Self::RoomKnownButConfigNotPresent(x) => write!(
+                f,
+                "Room {x} was known but its config is not present. Programmer Error."
+            ),
         }
     }
 }
@@ -93,7 +99,6 @@ impl From<std::io::Error> for ReadExtTempError {
     }
 }
 impl std::error::Error for ReadExtTempError {}
-
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct RoomTemperatureStatus {
@@ -115,7 +120,8 @@ impl RoomTemperatureStatus {
     /// internal, used for easier construction of test cases.
     pub(crate) fn _test_new(last_temperature: f32, time_till_timeout: u64) -> Self {
         Self {
-            last_temperature, time_till_timeout,
+            last_temperature,
+            time_till_timeout,
         }
     }
 
@@ -129,11 +135,22 @@ impl RoomTemperatureStatus {
     }
 
     /// Update the temperature with the given one, resetting the timeout.
-    fn update_with(&mut self, name: &str, temperature: f32, config: &Config) -> Result<(), ReadExtTempError> {
+    fn update_with(
+        &mut self,
+        name: &str,
+        temperature: f32,
+        config: &Config,
+    ) -> Result<(), ReadExtTempError> {
         self.last_temperature = temperature;
         match config.get_timeout_by_room_name(name) {
-            Some(x) => { self.time_till_timeout = x as u64 * 60; }
-            None => { return Err(ReadExtTempError::RoomKnownButConfigNotPresent(name.to_owned())) }
+            Some(x) => {
+                self.time_till_timeout = x as u64 * 60;
+            }
+            None => {
+                return Err(ReadExtTempError::RoomKnownButConfigNotPresent(
+                    name.to_owned(),
+                ))
+            }
         };
         Ok(())
     }
@@ -161,15 +178,14 @@ pub async fn read_ext_temp(
 ) -> Result<(), ReadExtTempError> {
     info!("Starting external temperature receiver");
     // crate Udp socket
-    let sock =
-        match UdpSocket::bind((config.current_temperature.bind_addr.clone(), 5442)).await {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Unable to open Udp Socket to listen for incoming external temperature.");
-                shutdown_tx.send_replace(InShutdown::Yes);
-                return Err(e.into());
-            }
-        };
+    let sock = match UdpSocket::bind((config.current_temperature.bind_addr.clone(), 5442)).await {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Unable to open Udp Socket to listen for incoming external temperature.");
+            shutdown_tx.send_replace(InShutdown::Yes);
+            return Err(e.into());
+        }
+    };
 
     // listen for UDP packets for 1m
     // IF something was received in that time:
