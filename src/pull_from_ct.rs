@@ -4,6 +4,7 @@ use std::{str::FromStr, sync::Arc};
 
 use chrono::{TimeZone, Utc};
 use itertools::Itertools;
+use reqwest::header;
 use serde::Deserialize;
 use tracing::{debug, info, trace, warn};
 
@@ -138,6 +139,7 @@ fn convert_date_or_datetime(
 /// Actually get Booking Data from Churchtools
 async fn get_relevant_bookings(
     config: &Config,
+    client: &reqwest::Client,
     start_date: chrono::NaiveDate,
     end_date: chrono::NaiveDate,
 ) -> Result<Vec<Booking>, CTApiError> {
@@ -159,11 +161,9 @@ async fn get_relevant_bookings(
     query_strings.push(("status_ids[]", "1".to_owned()));
     // --- approved
     query_strings.push(("status_ids[]", "2".to_owned()));
-    let response = match reqwest::Client::new()
+    let response = match client
         .get(format!("https://{}/api/bookings", config.ct.host))
         .query(&query_strings)
-        .header("accept", "application/json")
-        .header("Authorization", format!("Login {}", config.ct.login_token))
         .send()
         .await
     {
@@ -212,11 +212,11 @@ async fn get_relevant_bookings(
 }
 
 /// Read Bookings from CT and import them into the DB
-async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
+async fn get_bookings_into_db(config: Arc<Config>, client: &reqwest::Client) -> Result<(), GatherError> {
     let start = Utc::now().naive_utc().into();
     let end = start + chrono::TimeDelta::days(1);
     // get bookings from CT
-    let bookings_from_ct = get_relevant_bookings(&config, start, end).await?;
+    let bookings_from_ct = get_relevant_bookings(&config, client, start, end).await?;
     // get bookings from db
     let bookings_from_db = crate::db::get_bookings_in_timeframe(
         &config.db,
@@ -257,20 +257,44 @@ async fn get_bookings_into_db(config: Arc<Config>) -> Result<(), GatherError> {
     Ok(())
 }
 
+/// Create a Client with cookie store that sends the correct auth header each time
+///
+/// CT will honor the session cookie, and relogin when the cookie is stable because the correct
+/// auth header is also sent.
+fn create_client(config: &Config) -> Result<reqwest::Client, reqwest::Error> {
+    let mut headers = header::HeaderMap::new();
+    headers.insert(header::ACCEPT, header::HeaderValue::from_static("application/json"));
+    let mut auth_value = header::HeaderValue::from_str(&format!("Login {}",config.ct.login_token)).expect("statically good header");
+    auth_value.set_sensitive(true);
+    headers.insert(header::AUTHORIZATION, auth_value);
+    reqwest::Client::builder().cookie_store(true).default_headers(headers).use_rustls_tls().build()
+}
+
 /// Continuously pull Data from CT into the DB
 pub async fn keep_db_up_to_date(
     config: Arc<Config>,
     mut watcher: tokio::sync::watch::Receiver<InShutdown>,
+    shutdown_tx: tokio::sync::watch::Sender<InShutdown>,
 ) {
     info!("Starting CT -> DB Sync task");
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
         config.global.ct_pull_frequency,
     ));
+
+    let client = match create_client(&config) {
+        Ok(x) => x,
+        Err(e) => {
+            tracing::error!("Unable to create reqwest client: {e}");
+            shutdown_tx.send_replace(InShutdown::Yes);
+            return;
+        }
+    };
+
     interval.tick().await;
     loop {
         debug!("Gatherer starting new run.");
         // get new data
-        let ct_to_db_res = get_bookings_into_db(config.clone()).await;
+        let ct_to_db_res = get_bookings_into_db(config.clone(), &client).await;
         match ct_to_db_res {
             Ok(()) => debug!("Successfully updated db."),
             Err(e) => {

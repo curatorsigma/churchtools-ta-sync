@@ -128,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = tokio::sync::watch::channel(InShutdown::No);
 
     // start the data-gatherer
-    let gatherer_handle = tokio::spawn(pull_from_ct::keep_db_up_to_date(config.clone(), rx));
+    let gatherer_handle = tokio::spawn(pull_from_ct::keep_db_up_to_date(config.clone(), rx, tx.clone()));
 
     // start the data-sender
     let emitter_handle = tokio::spawn(push_to_ta::push_coe(
