@@ -1,4 +1,4 @@
-FROM rust:1.80-alpine AS builder
+FROM rust:1.88-alpine AS builder
 RUN apk add --no-cache build-base
 WORKDIR /usr/src/ct-ta-sync
 COPY . .
