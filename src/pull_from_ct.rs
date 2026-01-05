@@ -9,6 +9,8 @@ use serde::Deserialize;
 use tracing::{debug, info, trace, warn};
 
 use crate::{config::Config, db::DBError, Booking, InShutdown};
+// ignore bookings with this string in their description
+pub(crate) const IGNORE_MAGIC_STRING: &str = "NICHT_HEIZEN";
 
 #[derive(Debug, Deserialize)]
 struct CTBookingsResponse {
@@ -25,6 +27,7 @@ struct BookingsDataBase {
     /// this is the bookings ID
     id: i64,
     resource: ResourceData,
+    note: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -194,6 +197,13 @@ async fn get_relevant_bookings(
     response
         .data
         .into_iter()
+        // ignore bookings that are forced ignored for heating
+        .filter(|x: &BookingsData| {
+            !x.base
+                .note
+                .as_ref()
+                .is_some_and(|note| note.contains(IGNORE_MAGIC_STRING))
+        })
         .map(|x: BookingsData| {
             Ok::<Booking, CTApiError>(Booking {
                 booking_id: x.base.id,
